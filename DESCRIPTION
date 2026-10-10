@@ -1,0 +1,22 @@
+Package: metamixture
+Type: Package
+Title: Random-Effects Mixture Models for Meta-Analysis
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Caspar J.", "Van Lissa",
+      email = "c.j.vanlissa@tilburguniversity.edu",
+      role = c("aut", "cre")
+    )
+  )
+Description: Fits meta-analytic finite mixture models.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 8.0.0
+Imports:
+    methods,
+    stats,
+    tidySEM (>= 0.3.0),
+    OpenMx

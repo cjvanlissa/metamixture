@@ -5,10 +5,11 @@
 \title{Simulate Data from a Random-Effects Mixture Model}
 \usage{
 sim_mix_rma(
-  n = 100,
+  n = 100L,
   vi_range = c(0.01, 0.1),
-  classes = 3,
-  probs = rep(1/classes, classes),
+  classes = 2L,
+  p_ratio = 1L,
+  r2 = NULL,
   means = seq(from = 0, by = 0.2, length.out = classes),
   tau2 = rep(0.1, classes)
 )
@@ -21,7 +22,13 @@ sampling variances.}
 
 \item{classes}{Number of mixture classes.}
 
-\item{probs}{Vector of class membership probabilities.}
+\item{p_ratio}{Balance of class proportions. Default \code{1L} equally balances
+class proportions; higher values assign a higher proportion to
+the first class; e.g., \code{2L} means the first class will have twice the
+proportion of cases as other classes.}
+
+\item{r2}{Explained variance of the true class difference (excluding sampling
+variance \code{vi}). If \code{r2} is specified, \code{means} and \code{tau2} are ignored.}
 
 \item{means}{Vector of class-specific mean effect sizes.}
 

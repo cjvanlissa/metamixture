@@ -61,7 +61,7 @@ likelihood optimization.
 library(OpenMx)
 
 set.seed(7894)
-df <- sim_mix_rma(n = 200, classes = 2)
+df <- sim_mix_rma2(n = 200, classes = 2, p_ratio = 1, r2 = 1)
 
 # Conventional random-effects meta-analysis
 res1 <- remix(df$yi, df$vi, classes = 1)

@@ -19,4 +19,7 @@ Imports:
     methods,
     stats,
     tidySEM (>= 0.3.0),
-    OpenMx
+    OpenMx,
+    Rcpp
+LinkingTo: 
+    Rcpp

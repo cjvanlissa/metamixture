@@ -38,13 +38,11 @@ random_starts <- function(x,
     warning("First initialize the random number generator")
     invisible(stats::rnorm(1))
   }
-  seed_values <- .Random.seed
-  if(nstarts > length(seed_values)) stop("Too many `nstarts` for the number of random seeds.")
-
-  out <- lapply(seq_len(nstarts), function(i){
-    .Random.seed <- seed_values[i]
+  seed_values <- vector("list", length = nstarts)
+  for(i in seq_len(nstarts)){
+    seed_values[[i]] <- .Random.seed
     random_starts_remix_internal(x)
-  })
+  }
   if(!run) return(out)
   out <- lapply(out, OpenMx::mxRun)
   tab_ll <- data.frame(seed = seed_values[1:nstarts], Minus2LogLikelihood = sapply(out, function(x){x$output$Minus2LogLikelihood}))

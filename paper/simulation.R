@@ -48,10 +48,6 @@ lapply(packagenames, library, character.only = TRUE)
 num_sims = 10
 # Check package versions
 # Which packages require correct versions and which versions are they?--------------------------------------------------
-versions <- c(
-  compareVersion(as.character(packageVersion("pema")), "0.1.0.9000"),
-  compareVersion(as.character(packageVersion("rstan")), "2.21.2"))
-if(!all(versions > -1)) stop("Using the incorrect version of one or more packages.")
 
 # Prepare seeds
 RNGkind("L'Ecuyer-CMRG") # 1. RNG capable of creating multiple streams
@@ -86,7 +82,7 @@ sim_data <- function(k, classes, p_ratio, vi, r2){
   sigma_error <- sqrt(var(f_x) * (1 - r2) / r2)
   vi <- runif(k, min = 0, max = vi)
   y <- f_x + rnorm(k, sd = sigma_error + sqrt(vi))
-  data.frame(yi = y, vi = vi, C = C)
+  data.frame(yi = y, vi = vi, C = C, tau2 = sigma_error[1])
 }
 
 
@@ -100,7 +96,7 @@ registerDoSNOW(cl)
 #summarydata <- summarydata[sample.int(nrow(summarydata), 4, replace = FALSE), ]
 f <- list.files("./simulation_2026/results", full.names = TRUE)
 file.remove(f)
-
+max_classes <- max(summarydata$classes)+1L
 foreach(rownum = 1:nrow(summarydata), .packages = c("pema", "sn", "rstan", "glmnet"), .final = function(x) NULL) %dopar% {
   # rownum <- sample.int(nrow(summarydata), 1L)
   .Random.seed <- seeds[rownum][[1]]
@@ -108,14 +104,29 @@ foreach(rownum = 1:nrow(summarydata), .packages = c("pema", "sn", "rstan", "glmn
   df <- with(as.list(summarydata[rownum, ]), {
     sim_data(k = k, classes = classes, p_ratio = p_ratio, vi = vi, r2 = r2)
   })
-  res <- metamixture::remix(df$yi, df$vi, classes = 1:4)
-  fits <- table_fit(res)
-  aic <- which.min(fits$AIC)
-  bic <- which.min(fits$BIC)
-  pmcs <- metamixture:::pmc_remix(res)
-  rowSums(sign(pmcs[,c("lb", "ub")]))
+  tstart <- Sys.time()
+  res_mx <- remix(df$yi, df$vi, classes = 1:max_classes, method = "OpenMx")
+  time_mx <- as.numeric(Sys.time() - tstart)
+  tstart <- Sys.time()
+  res_cpp <- remix(yi = df$yi, vi = df$vi, classes = 1:max_classes, method = "cpp")
+  time_cpp <- as.numeric(Sys.time() - tstart)
 
-  out <- c( c(rownum, reps), results_function(dat, res))
+  fits_mx <- table_fit(res_mx)
+  aic_mx <- which.min(fits_mx$AIC)
+  bic_mx <- which.min(fits_mx$BIC)
+  pmcs <- metamixture:::pmc(res_mx)
+  pmc_mx <- sum(cumprod(rowSums(sign(pmcs[1:(max_classes-1L),c("lb", "ub")])) == -2))+1L
+
+  aic_cpp <- which.min(sapply(res_cpp, `[[`, "AIC"))
+  bic_cpp <- which.min(sapply(res_cpp, `[[`, "BIC"))
+  pmcs <- metamixture:::pmc(res_cpp)
+  pmc_cpp <- sum(cumprod(rowSums(sign(pmcs[1:(max_classes-1L),c("lb", "ub")])) == -2))+1L
+  # Bias
+
+  out <- c(rownum, aic_mx, bic_mx, pmc_mx, time_mx, aic_cpp, bic_cpp, pmc_cpp, time_cpp,
+           mu_bias_mx = res_mx[[summarydata$classes[rownum]]]$Mu1$values[1,1],
+           tau2_bias_mx = res_mx[[summarydata$classes[rownum]]]$Tau1$values[1,1] - df$tau2[1]
+           )
   write.table(x = t(out), file = sprintf("./simulation_2026/results/out_%d.txt" , Sys.getpid()), sep = "\t", append = TRUE, row.names = FALSE, col.names = FALSE)
 }
 

@@ -25,10 +25,15 @@
 #' @param init Optional list with length-K vectors mu, tau2, and pi. Replaces
 #'   the first starting solution rather than adding an extra start.
 #' @param keep_trace Whether to return the best ECM start's likelihood trace.
+#' @param compute_se Calculate observed-information standard errors (default TRUE).
+#' @param se_rel_step Relative step for numerical differentiation of the analytic score.
+#' @param se_boundary_tol Boundary tolerance; SEs are NA when regular Wald inference is inappropriate.
 #'
 #' @return A list with component estimates mu, tau2, and pi; posterior
 #'   probabilities and classifications; effective_n; logLik, AIC, and BIC;
 #'   n, K, and npar; converged; ecm and joint diagnostics; starts; and notes.
+#'   When requested, also returns se_mu, se_tau2, se_pi, se, vcov, information,
+#'   se_details, and se_status. On a boundary or singular fit, SEs are NA.
 #'   Components are sorted by increasing estimated mean. The ECM and joint
 #'   convergence diagnostics should be inspected separately.
 #'
@@ -41,7 +46,7 @@
 #' @useDynLib metamixture, .registration = TRUE
 #' @importFrom Rcpp evalCpp
 #' @export
-remix_cpp <- function(yi, vi, K = 2L, nstart = 20L, maxit = 1000L, tol = 1e-9, grid_size = 65L, profile_tol = 1e-10, joint = TRUE, joint_maxit = 1000L, joint_factr = 1e7, joint_pgtol = 1e-8, init = NULL, keep_trace = FALSE) {
-    .Call(`_metamixture_remix_cpp`, yi, vi, K, nstart, maxit, tol, grid_size, profile_tol, joint, joint_maxit, joint_factr, joint_pgtol, init, keep_trace)
+remix_cpp <- function(yi, vi, K = 2L, nstart = 20L, maxit = 1000L, tol = 1e-9, grid_size = 65L, profile_tol = 1e-10, joint = TRUE, joint_maxit = 1000L, joint_factr = 1e7, joint_pgtol = 1e-8, init = NULL, keep_trace = FALSE, compute_se = TRUE, se_rel_step = 1e-4, se_boundary_tol = 1e-10) {
+    .Call(`_metamixture_remix_cpp`, yi, vi, K, nstart, maxit, tol, grid_size, profile_tol, joint, joint_maxit, joint_factr, joint_pgtol, init, keep_trace, compute_se, se_rel_step, se_boundary_tol)
 }
 

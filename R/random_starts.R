@@ -38,20 +38,21 @@ random_starts <- function(x,
     warning("First initialize the random number generator")
     invisible(stats::rnorm(1))
   }
-  seed_values <- vector("list", length = nstarts)
+  out <- seed_values <- vector("list", length = nstarts)
   for(i in seq_len(nstarts)){
     seed_values[[i]] <- .Random.seed
-    random_starts_remix_internal(x)
+    out[[i]] <- random_starts_remix_internal(x)
   }
   if(!run) return(out)
   out <- lapply(out, OpenMx::mxRun)
-  tab_ll <- data.frame(seed = seed_values[1:nstarts], Minus2LogLikelihood = sapply(out, function(x){x$output$Minus2LogLikelihood}))
+  tab_ll <- data.frame(seed = seq_along(seed_values), Minus2LogLikelihood = sapply(out, function(x){x$output$Minus2LogLikelihood}))
   if(sum(tab_ll$Minus2LogLikelihood - min(tab_ll$Minus2LogLikelihood) < tolerance_minus2ll) < 2){
     warning("The smallest Minus2LogLikelihood was not replicated.")
   }
   if(verbose) print(tab_ll)
   out <- out[[which.min(tab_ll$Minus2LogLikelihood)]]
   attr(out, "tab_ll") <- tab_ll
+  attr(out, "seeds") <- seed_values
   return(out)
 }
 

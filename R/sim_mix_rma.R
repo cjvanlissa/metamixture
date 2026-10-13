@@ -19,10 +19,14 @@
 #' @examples
 #' set.seed(123)
 #' dat <- sim_mix_rma(n = 200, classes = 2,
-#'                    probs = c(0.7, 0.3),
+#'                    p_ratio = 2,
 #'                    means = c(0.2, 0.8),
 #'                    tau2 = c(0.05, 0.10))
 #' head(dat)
+#' dat <- sim_mix_rma(n = 200, classes = 2,
+#'                    p_ratio = 2,
+#'                    means = c(0, 3),
+#'                    tau2 = c(0.5, 2))
 #'
 #' @export
 sim_mix_rma <- function(n = 100L, vi_range = c(.01, .10), classes = 2L, p_ratio = 1L, r2 = NULL, means = seq(from = 0, by = .2, length.out = classes), tau2 = rep(.1, classes)){

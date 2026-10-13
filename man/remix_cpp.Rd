@@ -18,7 +18,10 @@ remix_cpp(
   joint_factr = 1e+07,
   joint_pgtol = 1e-08,
   init = NULL,
-  keep_trace = FALSE
+  keep_trace = FALSE,
+  compute_se = TRUE,
+  se_rel_step = 1e-04,
+  se_boundary_tol = 1e-10
 )
 }
 \arguments{
@@ -53,11 +56,19 @@ log1p(tau2 / min(vi)), using internally scaled data.}
 the first starting solution rather than adding an extra start.}
 
 \item{keep_trace}{Whether to return the best ECM start's likelihood trace.}
+
+\item{compute_se}{Calculate observed-information standard errors (default TRUE).}
+
+\item{se_rel_step}{Relative step for numerical differentiation of the analytic score.}
+
+\item{se_boundary_tol}{Boundary tolerance; SEs are NA when regular Wald inference is inappropriate.}
 }
 \value{
 A list with component estimates mu, tau2, and pi; posterior
 probabilities and classifications; effective_n; logLik, AIC, and BIC;
 n, K, and npar; converged; ecm and joint diagnostics; starts; and notes.
+When requested, also returns se_mu, se_tau2, se_pi, se, vcov, information,
+se_details, and se_status. On a boundary or singular fit, SEs are NA.
 Components are sorted by increasing estimated mean. The ECM and joint
 convergence diagnostics should be inspected separately.
 }

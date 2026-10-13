@@ -1,79 +1,8 @@
-#' Random-Effects Mixture Meta-Analysis
-#'
-#' Fits finite mixture models for random-effects meta-analysis
-#' using maximum likelihood estimation in `OpenMx`. Each mixture class
-#' has its own mean effect size and residual heterogeneity variance.
-#' Note that `OpenMx` must be loaded using `library(OpenMx)` before
-#' calling this function.
-#'
-#' The estimation procedure is described in
-#' Van Lissa, Garnier-Villarreal, & Anadria (2023): starting values
-#' are determined by way of K-means clustering, then the model is
-#' estimated using simulated annealing, followed by maximum
-#' likelihood optimization.
-#'
-#' @param yi Numeric vector of observed effect sizes.
-#' @param vi Numeric vector of known sampling variances.
-#' @param classes Integer vector specifying the number of mixture
-#' classes to fit. Defaults to \code{1L:2L}.
-#' @param run Logical. If \code{TRUE} (the default), the model is
-#' estimated using OpenMx. If \code{FALSE}, the unestimated
-#' OpenMx model object is returned, allowing further modification
-#' before estimation.
-#' @return
-#' If \code{classes} has length one, an OpenMx \code{MxModel}
-#' object; otherwise, a list of `MxModel`s with class
-#' \code{"mixture_list"}.
-#'
-#' The model parameters are:
-#' \describe{
-#'   \item{\code{Mu1}, \code{Mu2}, ...}{
-#'     Class-specific mean effect sizes.
-#'   }
-#'   \item{\code{Tau1}, \code{Tau2}, ...}{
-#'     Class-specific residual heterogeneity variances.
-#'   }
-#'   \item{\code{Eta}}{
-#'     Matrix of \eqn{K-1} freely estimated mixing-proportion
-#'     logits. The Kth mixing proportion is fixed, as it can
-#'     be computed from the others.
-#'   }
-#'   \item{\code{weights}}{
-#'     The estimated mixing proportions, computed from `Eta`
-#'   }
-#' }
-#' @examples
-#' \dontrun{
-#' library(OpenMx)
-#'
-#' set.seed(7894)
-#' df <- sim_mix_rma2(n = 200, classes = 2, p_ratio = 1, r2 = 1)
-#'
-#' # Conventional random-effects meta-analysis
-#' res1 <- remix(df$yi, df$vi, classes = 1)
-#' if(requireNamespace("metafor")){
-#'   res_mf <- metafor::rma(yi = df$yi, vi = df$vi)
-#'   res_mf$b[1,1] - res1$Mu1$values[1,1]
-#'   res_mf$tau2 - res1$Tau1$values[1,1]
-#' }
-#'
-#' # Two-class random-effects mixture model
-#' res2 <- remix(df$yi, df$vi, classes = 2)
-#' table_fit(res2)
-#' table_results(res2)
-#tmp <- metamixture:::random_starts(res2)
-#table_fit(tmp)
-#table_results(tmp)
-#' }
-#'
-#' @references Van Lissa, C. J., Garnier-Villarreal, M., & Anadria, D. (2023).
-#' Recommended Practices in Latent Class Analysis using the Open-Source
-#' R-Package tidySEM. Structural Equation Modeling.
-#' \doi{10.1080/10705511.2023.2250920}
-#' @export
-remix <- function(yi, vi,
-                         classes = 2L,
-                         run = TRUE) {
+remix_mx <- function(yi, vi,
+                     classes = 2L,
+                     mu = c("varying", "equal"),
+                     tau2 = c("varying", "equal"),
+                     run = TRUE) {
   intervals = TRUE
 
   if (!requireNamespace("OpenMx", quietly = TRUE)) {
@@ -86,7 +15,7 @@ remix <- function(yi, vi,
   }
   if(length(classes) > 1){
     out <- lapply(classes, function(i){
-      remix(yi = yi, vi = vi, classes = i, run = run)
+      remix_mx(yi = yi, vi = vi, classes = i, run = run)
     })
     attr(out, "tidySEM") <- "list"
     class(out) <- c("mixture_list", class(out))
@@ -152,7 +81,7 @@ remix <- function(yi, vi,
           free = TRUE, values = start_mu[k],
           lbound = min(yi),
           ubound = max(yi),
-          labels = paste0("mu", k),
+          labels = ifelse(mu == "varying", paste0("mu", k), "mu"),
           name = mu_name
         ),
         OpenMx::mxMatrix(
@@ -160,7 +89,7 @@ remix <- function(yi, vi,
           free = TRUE, values = start_tau2[k],
           lbound = 1e-7,
           ubound = max_tau2,
-          labels = paste0("tau2_", k),
+          labels = ifelse(tau2 == "varying", paste0("tau2_", k), "tau2"),
           name = tau_name
         )
       ))

@@ -11,8 +11,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // remix_cpp
-Rcpp::List remix_cpp(Rcpp::NumericVector yi, Rcpp::NumericVector vi, int K, int nstart, int maxit, double tol, int grid_size, double profile_tol, bool joint, int joint_maxit, double joint_factr, double joint_pgtol, Rcpp::Nullable<Rcpp::List> init, bool keep_trace);
-RcppExport SEXP _metamixture_remix_cpp(SEXP yiSEXP, SEXP viSEXP, SEXP KSEXP, SEXP nstartSEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP grid_sizeSEXP, SEXP profile_tolSEXP, SEXP jointSEXP, SEXP joint_maxitSEXP, SEXP joint_factrSEXP, SEXP joint_pgtolSEXP, SEXP initSEXP, SEXP keep_traceSEXP) {
+Rcpp::List remix_cpp(Rcpp::NumericVector yi, Rcpp::NumericVector vi, int K, int nstart, int maxit, double tol, int grid_size, double profile_tol, bool joint, int joint_maxit, double joint_factr, double joint_pgtol, Rcpp::Nullable<Rcpp::List> init, bool keep_trace, bool compute_se, double se_rel_step, double se_boundary_tol);
+RcppExport SEXP _metamixture_remix_cpp(SEXP yiSEXP, SEXP viSEXP, SEXP KSEXP, SEXP nstartSEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP grid_sizeSEXP, SEXP profile_tolSEXP, SEXP jointSEXP, SEXP joint_maxitSEXP, SEXP joint_factrSEXP, SEXP joint_pgtolSEXP, SEXP initSEXP, SEXP keep_traceSEXP, SEXP compute_seSEXP, SEXP se_rel_stepSEXP, SEXP se_boundary_tolSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -30,13 +30,16 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type joint_pgtol(joint_pgtolSEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::List> >::type init(initSEXP);
     Rcpp::traits::input_parameter< bool >::type keep_trace(keep_traceSEXP);
-    rcpp_result_gen = Rcpp::wrap(remix_cpp(yi, vi, K, nstart, maxit, tol, grid_size, profile_tol, joint, joint_maxit, joint_factr, joint_pgtol, init, keep_trace));
+    Rcpp::traits::input_parameter< bool >::type compute_se(compute_seSEXP);
+    Rcpp::traits::input_parameter< double >::type se_rel_step(se_rel_stepSEXP);
+    Rcpp::traits::input_parameter< double >::type se_boundary_tol(se_boundary_tolSEXP);
+    rcpp_result_gen = Rcpp::wrap(remix_cpp(yi, vi, K, nstart, maxit, tol, grid_size, profile_tol, joint, joint_maxit, joint_factr, joint_pgtol, init, keep_trace, compute_se, se_rel_step, se_boundary_tol));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_metamixture_remix_cpp", (DL_FUNC) &_metamixture_remix_cpp, 14},
+    {"_metamixture_remix_cpp", (DL_FUNC) &_metamixture_remix_cpp, 17},
     {NULL, NULL, 0}
 };
 

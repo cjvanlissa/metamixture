@@ -478,6 +478,105 @@ metamixture_core::Params read_init(Rcpp::List init, const metamixture_core::Data
     for (int k = 0; k < K; ++k) p.pi[k] = static_cast<double>((pi[k] / largest) / total);
     return p;
 }
+
+// Observed-information standard errors. The core already supplies the exact
+// analytic gradient of -logLik/n on internally standardized data.
+// Central differences of that gradient yield the observed Hessian.
+Rcpp::List standard_errors(const metamixture_core::Data& d,
+                           const metamixture_core::Params& p,
+                           const std::vector<double>& yi,
+                           double rel_step, double boundary_tol,
+                           bool converged) {
+    (void)converged;
+    using namespace Rcpp;
+    const int K = p.size(), q = 3*K-1, m = 3*K;
+    if (!std::isfinite(rel_step) || rel_step <= 0 || rel_step >= .1)
+        stop("se_rel_step must be in (0, 0.1).");
+    if (!std::isfinite(boundary_tol) || boundary_tol < 0)
+        stop("se_boundary_tol must be finite and nonnegative.");
+    double mean = std::accumulate(yi.begin(), yi.end(), 0.0)/yi.size();
+    long double ss = 0;
+    for (double z : yi) ss += (static_cast<long double>(z)-mean)*(z-mean);
+    double variance = static_cast<double>(ss/(yi.size()-1));
+    if (!std::isfinite(variance)) throw std::runtime_error("Cannot compute sample variance for SE boundary check.");
+    for (int k=0;k<K;++k) {
+        const double tau_orig = (p.tau[k]*d.scale)*d.scale;
+        if (tau_orig <= boundary_tol*std::max(1.0, variance) ||
+            p.pi[k] <= boundary_tol || (K>1 && p.pi[k]>=1-boundary_tol))
+            throw std::runtime_error("Boundary fit: inverse-information standard errors are unreliable.");
+    }
+    std::vector<double> theta(q);
+    for (int k=0;k<K;++k) { theta[k]=p.mu[k]; theta[K+k]=p.tau[k]; }
+    for (int k=0;k<K-1;++k) theta[2*K+k]=std::log(p.pi[k]/p.pi[K-1]);
+    metamixture_core::Joint joint(d,K);
+    NumericMatrix H(q,q);
+    for (int j=0;j<q;++j) {
+        double h=rel_step*std::max(1.0,std::fabs(theta[j]));
+        if (j>=K && j<2*K) h=std::min(h, theta[j]*.25);
+        if (!(h>0) || !std::isfinite(h))
+            throw std::runtime_error("Unable to construct interior finite-difference step.");
+        std::vector<double> plus=theta, minus=theta;
+        plus[j]+=h; minus[j]-=h;
+        joint.evaluate(plus);
+        std::vector<double> gp=joint.gradient;
+        joint.evaluate(minus);
+        std::vector<double> gm=joint.gradient;
+        for (int i=0;i<q;++i)
+            H(i,j) = -d.n*(gp[i]-gm[i])/(2*h);
+    }
+    NumericMatrix info(q,q);
+    for (int j=0;j<q;++j)
+        for (int i=0;i<q;++i)
+            info(i,j)=-.5*(H(i,j)+H(j,i));
+    Environment base=Environment::base_env();
+    Function eigen=base["eigen"], solve=base["solve"];
+    List eig=eigen(info, _["symmetric"]=true, _["only.values"]=true);
+    NumericVector ev=eig["values"];
+    double lo=*std::min_element(ev.begin(),ev.end());
+    double hi=*std::max_element(ev.begin(),ev.end());
+    if (!std::isfinite(lo) || !std::isfinite(hi) || lo<=0 || lo<=hi*1e-8)
+        throw std::runtime_error("Observed information is singular or nearly singular.");
+    NumericMatrix V=solve(info);
+    NumericMatrix J(m,q);
+    for (int k=0;k<K;++k) {
+        J(k,k)=d.scale;
+        J(K+k,K+k)=d.scale*d.scale;
+        for (int j=0;j<K-1;++j)
+            J(2*K+k,2*K+j)=p.pi[k]*((k==j?1.0:0.0)-p.pi[j]);
+    }
+    NumericMatrix Vout(m,m);
+    // Compute J V J^T without external linear-algebra dependencies.
+    std::vector<double> JV(static_cast<std::size_t>(m)*q,0.0);
+    for (int a=0;a<m;++a) for (int j=0;j<q;++j)
+        for (int b=0;b<q;++b) JV[a*q+j]+=J(a,b)*V(b,j);
+    for (int a=0;a<m;++a) for (int b=0;b<m;++b)
+        for (int j=0;j<q;++j) Vout(a,b)+=JV[a*q+j]*J(b,j);
+    CharacterVector nm(m);
+    NumericVector estimates(m), ses(m), se_mu(K), se_tau2(K), se_pi(K);
+    for (int k=0;k<K;++k) {
+        nm[k]="mu"+std::to_string(k+1);
+        nm[K+k]="tau2"+std::to_string(k+1);
+        nm[2*K+k]="pi"+std::to_string(k+1);
+        estimates[k]=d.center+d.scale*p.mu[k];
+        estimates[K+k]=(p.tau[k]*d.scale)*d.scale;
+        estimates[2*K+k]=p.pi[k];
+    }
+    for (int a=0;a<m;++a) {
+        if (!std::isfinite(Vout(a,a))) throw std::runtime_error("Nonfinite SE covariance diagonal.");
+        ses[a]=std::sqrt(std::max(0.0,Vout(a,a)));
+    }
+    for (int k=0;k<K;++k) {
+        se_mu[k]=ses[k]; se_tau2[k]=ses[K+k]; se_pi[k]=ses[2*K+k];
+    }
+    ses.attr("names")=nm; estimates.attr("names")=nm;
+    Vout.attr("dimnames")=List::create(nm,nm);
+    return List::create(_["se_mu"]=se_mu, _["se_tau2"]=se_tau2,
+        _["se_pi"]=se_pi, _["estimates"]=estimates, _["se"]=ses,
+        _["vcov"]=Vout, _["information"]=info,
+        _["min_information_eigenvalue"]=lo,
+        _["method"]="Inverse observed information; central differences of analytic score");
+}
+
 } // namespace metamixture_rcpp
 
 //' Fit a random-effects mixture model
@@ -504,10 +603,15 @@ metamixture_core::Params read_init(Rcpp::List init, const metamixture_core::Data
 //' @param init Optional list with length-K vectors mu, tau2, and pi. Replaces
 //'   the first starting solution rather than adding an extra start.
 //' @param keep_trace Whether to return the best ECM start's likelihood trace.
+//' @param compute_se Calculate observed-information standard errors (default TRUE).
+//' @param se_rel_step Relative step for numerical differentiation of the analytic score.
+//' @param se_boundary_tol Boundary tolerance; SEs are NA when regular Wald inference is inappropriate.
 //'
 //' @return A list with component estimates mu, tau2, and pi; posterior
 //'   probabilities and classifications; effective_n; logLik, AIC, and BIC;
 //'   n, K, and npar; converged; ecm and joint diagnostics; starts; and notes.
+//'   When requested, also returns se_mu, se_tau2, se_pi, se, vcov, information,
+//'   se_details, and se_status. On a boundary or singular fit, SEs are NA.
 //'   Components are sorted by increasing estimated mean. The ECM and joint
 //'   convergence diagnostics should be inspected separately.
 //'
@@ -528,7 +632,8 @@ Rcpp::List remix_cpp(
         bool joint = true, int joint_maxit = 1000,
         double joint_factr = 1e7, double joint_pgtol = 1e-8,
         Rcpp::Nullable<Rcpp::List> init = R_NilValue,
-        bool keep_trace = false) {
+        bool keep_trace = false, bool compute_se = true,
+        double se_rel_step = 1e-4, double se_boundary_tol = 1e-10) {
     using namespace Rcpp;
     if (K == NA_INTEGER || nstart == NA_INTEGER || maxit == NA_INTEGER ||
         grid_size == NA_INTEGER || joint_maxit == NA_INTEGER ||
@@ -666,6 +771,8 @@ Rcpp::List remix_cpp(
     bool converged = joint_accepted ? (joint_code == 0) : best.converged;
     Rcpp::List out = List::create(
       _["mu"] = estimates["mu"], _["tau2"] = estimates["tau2"], _["pi"] = estimates["pi"],
+                        _["yi"] = yi,
+                        _["vi"] = vi,
                         _["posterior"] = posterior, _["classification"] = classification,
                         _["effective_n"] = effective_n, _["logLik"] = ll,
                         _["AIC"] = -2*ll + 2*npar, _["BIC"] = -2*ll + std::log(static_cast<double>(d.n))*npar,
@@ -683,6 +790,29 @@ Rcpp::List remix_cpp(
                                                                                                 _["iterations"] = start_it, _["converged"] = start_conv,
                                                                                                 _["active_components"] = active, _["status"] = start_status),
                                                                                                 _["notes"] = notes);
+
+    if (compute_se) {
+        try {
+            Rcpp::List se_result = metamixture_rcpp::standard_errors(
+                d, final_p, Rcpp::as<std::vector<double> >(yi),
+                se_rel_step, se_boundary_tol, converged);
+            out["se_mu"] = se_result["se_mu"];
+            out["se_tau2"] = se_result["se_tau2"];
+            out["se_pi"] = se_result["se_pi"];
+            out["se"] = se_result["se"];
+            out["vcov"] = se_result["vcov"];
+            out["information"] = se_result["information"];
+            out["se_details"] = se_result;
+            out["se_status"] = converged ? "ok" : "fit_not_converged";
+        } catch (const std::exception& e) {
+            out["se_mu"] = Rcpp::NumericVector(K, NA_REAL);
+            out["se_tau2"] = Rcpp::NumericVector(K, NA_REAL);
+            out["se_pi"] = Rcpp::NumericVector(K, NA_REAL);
+            out["se_status"] = std::string(e.what());
+        }
+    } else {
+        out["se_status"] = "disabled";
+    }
 
     out.attr("class") = Rcpp::CharacterVector::create("remix_cpp", "list");
 

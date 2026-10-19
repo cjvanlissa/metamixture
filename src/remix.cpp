@@ -1,6 +1,5 @@
 // Finite mixtures of random-effects meta-analysis models.
-// yi | component k ~ N(mu[k], vi + tau2[k]), with fixed, known vi > 0.
-// Regenerate RcppExports with Rcpp::compileAttributes()
+// Regenerate RcppExports with Rcpp::compileAttributes() after replacing it.
 #include <Rcpp.h>
 #include <algorithm>
 #include <cmath>
@@ -297,6 +296,117 @@ Params initialize(const Data& d, int K, int start) {
     return p;
 }
 
+
+// Equality constraints are represented by a reduced parameter vector.
+struct Constraint {
+    bool equal_mu, equal_tau;
+    int K, nm, nt, q;
+    Constraint(int k, bool em, bool et): equal_mu(em), equal_tau(et), K(k),
+        nm(em?1:k), nt(et?1:k), q(nm+nt+k-1) {}
+    void enforce(Params& p) const {
+        if (equal_mu) {
+            double avg=0; for (int k=0;k<K;++k) avg+=p.pi[k]*p.mu[k];
+            std::fill(p.mu.begin(),p.mu.end(),avg);
+        }
+        if (equal_tau) {
+            double avg=0; for (int k=0;k<K;++k) avg+=p.pi[k]*p.tau[k];
+            std::fill(p.tau.begin(),p.tau.end(),avg);
+        }
+    }
+    std::vector<double> pack(const Params& p) const {
+        std::vector<double> th(q);
+        for (int j=0;j<nm;++j) th[j]=p.mu[j];
+        for (int j=0;j<nt;++j) th[nm+j]=p.tau[j];
+        for (int j=0;j<K-1;++j)
+            th[nm+nt+j]=std::log(std::max(1e-12,p.pi[j]))-std::log(std::max(1e-12,p.pi[K-1]));
+        return th;
+    }
+    Params unpack(const std::vector<double>& th, std::vector<double>& lp) const {
+        if ((int)th.size()!=q) throw std::invalid_argument("Incorrect constrained parameter length");
+        Params p(K);
+        double mx=0;
+        for(int j=0;j<K-1;++j) mx=std::max(mx,th[nm+nt+j]);
+        double den=std::exp(-mx);
+        for(int j=0;j<K-1;++j) den+=std::exp(th[nm+nt+j]-mx);
+        double logden=mx+std::log(den);
+        lp.resize(K);
+        for(int k=0;k<K;++k){
+            p.mu[k]=th[equal_mu?0:k];
+            p.tau[k]=th[nm+(equal_tau?0:k)];
+            lp[k]=(k<K-1?th[nm+nt+k]:0)-logden;
+            p.pi[k]=std::exp(lp[k]);
+        }
+        return p;
+    }
+};
+
+// The same reduced objective/gradient is used for refinement and SEs.
+struct ConstrainedJoint {
+    Data d;
+    Constraint c;
+    std::vector<double> last, gradient;
+    double value;
+    bool cached;
+    ConstrainedJoint(const Data& data, const Constraint& cc):d(data),c(cc),value(INF),cached(false){}
+    Params unpack(const std::vector<double>& th,std::vector<double>& lp) const {return c.unpack(th,lp);}
+    void evaluate(const std::vector<double>& th){
+        if(cached && th==last)return;
+        for(double z:th)if(!std::isfinite(z))throw std::runtime_error("Nonfinite constrained parameter");
+        std::vector<double> lp,r;
+        Params p=c.unpack(th,lp);
+        for(double t:p.tau)if(t<0)throw std::runtime_error("Negative variance");
+        double ll=estep(d,p,r,&lp);
+        if(!std::isfinite(ll))throw std::runtime_error("Nonfinite likelihood");
+        std::vector<long double> g(c.q,0);
+        for(int i=0;i<d.n;++i)for(int k=0;k<c.K;++k){
+            double rik=r[(std::size_t)i*c.K+k];
+            if(rik==0)continue;
+            long double v=d.v[i]+p.tau[k], z=(long double)p.mu[k]-d.y[i];
+            g[c.equal_mu?0:k]+=rik*z/v;
+            g[c.nm+(c.equal_tau?0:k)]+=0.5L*rik*(1-z*z/v)/v;
+            if(k<c.K-1)g[c.nm+c.nt+k]-=rik;
+        }
+        gradient.resize(c.q);
+        for(int j=0;j<c.q;++j)gradient[j]=(double)(g[j]/d.n);
+        for(int j=0;j<c.K-1;++j)gradient[c.nm+c.nt+j]+=p.pi[j];
+        value=-ll/d.n;last=th;cached=true;
+    }
+};
+
+// Robust bounded one-dimensional search: dense linear/log grids and Brent
+// refinement around every sampled local minimum.
+template<class F> double bounded_minimum(F fun,double current,double upper,int grid_size,double vmin,double tol){
+    if(upper<=0)return 0;
+    std::vector<double> xs;
+    xs.push_back(clamp(current,0,upper));
+    for(int j=0;j<grid_size;++j){
+        double u=(double)j/(grid_size-1);
+        xs.push_back(u*upper);
+        xs.push_back(vmin*std::expm1(u*std::log1p(upper/vmin)));
+    }
+    std::sort(xs.begin(),xs.end());
+    xs.erase(std::unique(xs.begin(),xs.end()),xs.end());
+    std::vector<double> fs(xs.size());
+    int best=0;
+    for(std::size_t j=0;j<xs.size();++j){fs[j]=fun(xs[j]);if(fs[j]<fs[best])best=(int)j;}
+    double bt=xs[best],bf=fs[best];
+    for(std::size_t j=1;j+1<xs.size();++j){
+        if(fs[j]>fs[j-1]||fs[j]>fs[j+1])continue;
+        double a=xs[j-1],b=xs[j+1];
+        const double phi=0.3819660112501051;
+        double x1=a+phi*(b-a),x2=b-phi*(b-a),f1=fun(x1),f2=fun(x2);
+        for(int it=0;it<130 && b-a>tol*(1+std::fabs(a)+std::fabs(b));++it){
+            if(f1<f2){b=x2;x2=x1;f2=f1;x1=a+phi*(b-a);f1=fun(x1);}
+            else {a=x1;x1=x2;f1=f2;x2=b-phi*(b-a);f2=fun(x2);}
+        }
+        if(f1<bf){bf=f1;bt=x1;}
+        if(f2<bf){bf=f2;bt=x2;}
+    }
+    return bt;
+}
+
+// Constrained generalized ECM: exact conditional mean updates, followed by
+// variance coordinate updates. Every outer step is likelihood-safeguarded.
 struct Run {
     Params p;
     double ll;
@@ -352,6 +462,94 @@ Run ecm(const Data& d, Params p, int maxit, double tol,
         }
     }
     out.p = p; out.ll = ll;
+    return out;
+}
+
+
+Run ecm_constrained(const Data& d,Params p,const Constraint& c,int maxit,double tol,
+                    int grid_size,double profile_tol,bool keep_trace){
+    Run out;
+    c.enforce(p);
+    std::vector<double> r;
+    double ll=estep(d,p,r);
+    out.p=p;out.ll=ll;
+    if(!std::isfinite(ll)){out.status="nonfinite_start";return out;}
+    if(keep_trace)out.trace.push_back(ll);
+    out.status="maxit";
+    for(int it=0;it<maxit;++it){
+        if(it%5==0)interrupt();
+        Params next=p;
+        for(int k=0;k<c.K;++k){
+            long double mass=0;
+            for(int i=0;i<d.n;++i)mass+=r[(std::size_t)i*c.K+k];
+            next.pi[k]=(double)(mass/d.n);
+        }
+        double psum=std::accumulate(next.pi.begin(),next.pi.end(),0.0);
+        for(double& w:next.pi)w/=psum;
+        // Inner coordinate ascent uses fixed responsibilities.
+        for(int inner=0;inner<12;++inner){
+            Params old=next;
+            // Conditional means (shared or class-specific).
+            if(c.equal_mu){
+                long double sw=0,swy=0;
+                for(int i=0;i<d.n;++i)for(int k=0;k<c.K;++k){
+                    long double w=r[(std::size_t)i*c.K+k]/(d.v[i]+next.tau[k]);
+                    sw+=w;swy+=w*d.y[i];
+                }
+                if(sw>0)std::fill(next.mu.begin(),next.mu.end(),(double)(swy/sw));
+            }else{
+                for(int k=0;k<c.K;++k){
+                    long double sw=0,swy=0;
+                    for(int i=0;i<d.n;++i){
+                        long double w=r[(std::size_t)i*c.K+k]/(d.v[i]+next.tau[k]);
+                        sw+=w;swy+=w*d.y[i];
+                    }
+                    if(sw>0)next.mu[k]=(double)(swy/sw);
+                }
+            }
+            if(c.equal_tau){
+                auto fun=[&](double t){
+                    long double f=0;
+                    for(int i=0;i<d.n;++i)for(int k=0;k<c.K;++k){
+                        long double w=r[(std::size_t)i*c.K+k],v=d.v[i]+t,z=d.y[i]-next.mu[k];
+                        f+=w*(std::log((double)v)+z*z/v);
+                    }
+                    return (double)(f/(2*d.n));
+                };
+                double t=bounded_minimum(fun,next.tau[0],d.upper,grid_size,d.vmin,profile_tol);
+                std::fill(next.tau.begin(),next.tau.end(),t);
+            }else{
+                for(int k=0;k<c.K;++k){
+                    auto fun=[&](double t){
+                        long double f=0;
+                        for(int i=0;i<d.n;++i){
+                            long double w=r[(std::size_t)i*c.K+k],v=d.v[i]+t,z=d.y[i]-next.mu[k];
+                            f+=w*(std::log((double)v)+z*z/v);
+                        }
+                        return (double)(f/d.n);
+                    };
+                    next.tau[k]=bounded_minimum(fun,next.tau[k],d.upper,grid_size,d.vmin,profile_tol);
+                }
+            }
+            double change=0;
+            for(int k=0;k<c.K;++k)change=std::max(change,std::max(std::fabs(next.mu[k]-old.mu[k]),std::fabs(next.tau[k]-old.tau[k])));
+            if(change<1e-10)break;
+        }
+        std::vector<double> nr;
+        double nll=estep(d,next,nr);
+        if(!std::isfinite(nll)||nll<ll){
+            double roundoff=128*std::numeric_limits<double>::epsilon()*(1+std::fabs(ll));
+            out.converged=std::isfinite(nll)&&ll-nll<=roundoff;
+            out.status=out.converged?"roundoff_limit":"likelihood_decrease_rejected";
+            break;
+        }
+        double gain=(nll-ll)/d.n;
+        p=std::move(next);r=std::move(nr);ll=nll;
+        out.iterations=it+1;
+        if(keep_trace)out.trace.push_back(ll);
+        if(gain<=tol){out.converged=true;out.status="likelihood_tolerance";break;}
+    }
+    out.p=p;out.ll=ll;
     return out;
 }
 
@@ -451,6 +649,16 @@ Rcpp::List params_list(const metamixture_core::Data& d, const metamixture_core::
     }
     return Rcpp::List::create(Rcpp::_["mu"] = mu, Rcpp::_["tau2"] = tau, Rcpp::_["pi"] = pi);
 }
+
+double constrained_fn(Rcpp::NumericVector par,SEXP context){
+    Rcpp::XPtr<metamixture_core::ConstrainedJoint> obj(context);
+    obj->evaluate(Rcpp::as<std::vector<double> >(par));return obj->value;
+}
+Rcpp::NumericVector constrained_gr(Rcpp::NumericVector par,SEXP context){
+    Rcpp::XPtr<metamixture_core::ConstrainedJoint> obj(context);
+    obj->evaluate(Rcpp::as<std::vector<double> >(par));return Rcpp::wrap(obj->gradient);
+}
+
 metamixture_core::Params read_init(Rcpp::List init, const metamixture_core::Data& d, int K) {
     if (!init.containsElementNamed("mu") || !init.containsElementNamed("tau2") ||
         !init.containsElementNamed("pi")) Rcpp::stop("init must contain mu, tau2, and pi.");
@@ -486,10 +694,10 @@ Rcpp::List standard_errors(const metamixture_core::Data& d,
                            const metamixture_core::Params& p,
                            const std::vector<double>& yi,
                            double rel_step, double boundary_tol,
-                           bool converged) {
+                           bool converged, const metamixture_core::Constraint& c) {
     (void)converged;
     using namespace Rcpp;
-    const int K = p.size(), q = 3*K-1, m = 3*K;
+    const int K = p.size(), q = c.q, m = 3*K;
     if (!std::isfinite(rel_step) || rel_step <= 0 || rel_step >= .1)
         stop("se_rel_step must be in (0, 0.1).");
     if (!std::isfinite(boundary_tol) || boundary_tol < 0)
@@ -505,14 +713,12 @@ Rcpp::List standard_errors(const metamixture_core::Data& d,
             p.pi[k] <= boundary_tol || (K>1 && p.pi[k]>=1-boundary_tol))
             throw std::runtime_error("Boundary fit: inverse-information standard errors are unreliable.");
     }
-    std::vector<double> theta(q);
-    for (int k=0;k<K;++k) { theta[k]=p.mu[k]; theta[K+k]=p.tau[k]; }
-    for (int k=0;k<K-1;++k) theta[2*K+k]=std::log(p.pi[k]/p.pi[K-1]);
-    metamixture_core::Joint joint(d,K);
+    std::vector<double> theta=c.pack(p);
+    metamixture_core::ConstrainedJoint joint(d,c);
     NumericMatrix H(q,q);
     for (int j=0;j<q;++j) {
         double h=rel_step*std::max(1.0,std::fabs(theta[j]));
-        if (j>=K && j<2*K) h=std::min(h, theta[j]*.25);
+        if (j>=c.nm && j<c.nm+c.nt) h=std::min(h, theta[j]*.25);
         if (!(h>0) || !std::isfinite(h))
             throw std::runtime_error("Unable to construct interior finite-difference step.");
         std::vector<double> plus=theta, minus=theta;
@@ -539,10 +745,10 @@ Rcpp::List standard_errors(const metamixture_core::Data& d,
     NumericMatrix V=solve(info);
     NumericMatrix J(m,q);
     for (int k=0;k<K;++k) {
-        J(k,k)=d.scale;
-        J(K+k,K+k)=d.scale*d.scale;
+        J(k,c.equal_mu?0:k)=d.scale;
+        J(K+k,c.nm+(c.equal_tau?0:k))=d.scale*d.scale;
         for (int j=0;j<K-1;++j)
-            J(2*K+k,2*K+j)=p.pi[k]*((k==j?1.0:0.0)-p.pi[j]);
+            J(2*K+k,c.nm+c.nt+j)=p.pi[k]*((k==j?1.0:0.0)-p.pi[j]);
     }
     NumericMatrix Vout(m,m);
     // Compute J V J^T without external linear-algebra dependencies.
@@ -606,10 +812,13 @@ Rcpp::List standard_errors(const metamixture_core::Data& d,
 //' @param compute_se Calculate observed-information standard errors (default TRUE).
 //' @param se_rel_step Relative step for numerical differentiation of the analytic score.
 //' @param se_boundary_tol Boundary tolerance; SEs are NA when regular Wald inference is inappropriate.
+//' @param mu Whether component means are `varying` or `equal`.
+//' @param tau2 Whether component heterogeneity variances are `varying` or `equal`.
 //'
 //' @return A list with component estimates mu, tau2, and pi; posterior
 //'   probabilities and classifications; effective_n; logLik, AIC, and BIC;
 //'   n, K, and npar; converged; ecm and joint diagnostics; starts; and notes.
+//'   Equality-constrained estimates are repeated for all K components.
 //'   When requested, also returns se_mu, se_tau2, se_pi, se, vcov, information,
 //'   se_details, and se_status. On a boundary or singular fit, SEs are NA.
 //'   Components are sorted by increasing estimated mean. The ECM and joint
@@ -623,7 +832,7 @@ Rcpp::List standard_errors(const metamixture_core::Data& d,
 //'
 //' @useDynLib metamixture, .registration = TRUE
 //' @importFrom Rcpp evalCpp
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 Rcpp::List remix_cpp(
         Rcpp::NumericVector yi, Rcpp::NumericVector vi,
@@ -633,7 +842,8 @@ Rcpp::List remix_cpp(
         double joint_factr = 1e7, double joint_pgtol = 1e-8,
         Rcpp::Nullable<Rcpp::List> init = R_NilValue,
         bool keep_trace = false, bool compute_se = true,
-        double se_rel_step = 1e-4, double se_boundary_tol = 1e-10) {
+        double se_rel_step = 1e-4, double se_boundary_tol = 1e-10,
+        std::string mu = "varying", std::string tau2 = "varying") {
     using namespace Rcpp;
     if (K == NA_INTEGER || nstart == NA_INTEGER || maxit == NA_INTEGER ||
         grid_size == NA_INTEGER || joint_maxit == NA_INTEGER ||
@@ -643,10 +853,15 @@ Rcpp::List remix_cpp(
         !std::isfinite(joint_factr) || joint_factr <= 0 ||
         !std::isfinite(joint_pgtol) || joint_pgtol < 0)
         stop("Invalid K or optimization controls.");
+    if (mu != "varying" && mu != "equal") stop("mu must be varying or equal");
+    if (tau2 != "varying" && tau2 != "equal") stop("tau2 must be varying or equal");
+    if (K > 1 && mu == "equal" && tau2 == "equal")
+        stop("When both mu and tau2 are equal, the K classes are identical and mixing proportions are unidentified. Fit K=1 instead.");
+    metamixture_core::Constraint constraints(K, mu == "equal", tau2 == "equal");
     metamixture_core::Data d(as<std::vector<double> >(yi), as<std::vector<double> >(vi));
     metamixture_core::Params user_init;
     bool have_init = init.isNotNull();
-    if (have_init) user_init = metamixture_rcpp::read_init(List(init.get()), d, K);
+    if (have_init) { user_init = metamixture_rcpp::read_init(List(init.get()), d, K); constraints.enforce(user_init); }
     metamixture_core::Run best;
     int best_start = -1;
     NumericVector start_ll(nstart);
@@ -656,7 +871,10 @@ Rcpp::List remix_cpp(
     for (int s = 0; s < nstart; ++s) {
         checkUserInterrupt();
         metamixture_core::Params p = (s == 0 && have_init) ? user_init : metamixture_core::initialize(d, K, s);
-        metamixture_core::Run run = metamixture_core::ecm(d, p, maxit, tol, grid_size, profile_tol, keep_trace);
+        constraints.enforce(p);
+        metamixture_core::Run run = (!constraints.equal_mu && !constraints.equal_tau) ?
+            metamixture_core::ecm(d, p, maxit, tol, grid_size, profile_tol, keep_trace) :
+            metamixture_core::ecm_constrained(d, p, constraints, maxit, tol, grid_size, profile_tol, keep_trace);
         start_number[s] = s + 1; start_ll[s] = d.original_ll(run.ll);
         start_it[s] = run.iterations; start_conv[s] = run.converged;
         start_status[s] = run.status;
@@ -686,25 +904,22 @@ Rcpp::List remix_cpp(
             int ref = static_cast<int>(std::max_element(p.pi.begin(), p.pi.end()) - p.pi.begin());
             std::swap(p.mu[ref], p.mu[K-1]); std::swap(p.tau[ref], p.tau[K-1]);
             std::swap(p.pi[ref], p.pi[K-1]);
-            NumericVector par(3*K-1), lower(3*K-1, R_NegInf), upper(3*K-1, R_PosInf);
+            std::vector<double> start_theta = constraints.pack(p);
+            NumericVector par = Rcpp::wrap(start_theta);
+            NumericVector lower(constraints.q, R_NegInf), upper(constraints.q, R_PosInf);
             const double start_floor = 1e-12;
-            for (int k = 0; k < K; ++k) {
-                par[k] = p.mu[k]; par[K+k] = p.tau[k];
-                lower[k] = d.ymin; upper[k] = d.ymax;
-                lower[K+k] = 0; upper[K+k] = d.upper;
-                if (p.pi[k] < start_floor) joint_start_adjusted = true;
-                if (k < K-1)
-                    par[2*K+k] = std::log(std::max(start_floor, p.pi[k])) -
-                                 std::log(std::max(start_floor, p.pi[K-1]));
-            }
-            XPtr<metamixture_core::Joint> context(new metamixture_core::Joint(d, K), true);
-            context->evaluate(as<std::vector<double> >(par));
+            for (int j=0;j<constraints.nm;++j) { lower[j]=d.ymin;upper[j]=d.ymax; }
+            for (int j=0;j<constraints.nt;++j) { lower[constraints.nm+j]=0;upper[constraints.nm+j]=d.upper; }
+            for (double w:p.pi) if (w < start_floor) joint_start_adjusted=true;
+            XPtr<metamixture_core::ConstrainedJoint> context(
+                new metamixture_core::ConstrainedJoint(d, constraints), true);
+            context->evaluate(start_theta);
             joint_start_ll = d.original_ll(-d.n * context->value);
             Environment stats = Environment::namespace_env("stats");
             Function optim = stats["optim"];
             List opt = optim(_["par"] = par,
-                _["fn"] = InternalFunction(&metamixture_rcpp::joint_fn),
-                _["gr"] = InternalFunction(&metamixture_rcpp::joint_gr),
+                _["fn"] = InternalFunction(&metamixture_rcpp::constrained_fn),
+                _["gr"] = InternalFunction(&metamixture_rcpp::constrained_gr),
                 _["method"] = "L-BFGS-B", _["lower"] = lower, _["upper"] = upper,
                 _["control"] = List::create(_["maxit"] = joint_maxit,
                     _["factr"] = joint_factr, _["pgtol"] = joint_pgtol),
@@ -722,7 +937,7 @@ Rcpp::List remix_cpp(
             double candidate_ll = metamixture_core::estep(d, candidate, rr);
             joint_ll = d.original_ll(candidate_ll);
             pg_norm = 0;
-            for (int j = 0; j < 3*K-1; ++j) {
+            for (int j = 0; j < constraints.q; ++j) {
                 double g = context->gradient[j];
                 double projected = theta[j] - metamixture_core::clamp(theta[j] - g, lower[j], upper[j]);
                 pg_norm = std::max(pg_norm, std::fabs(projected));
@@ -737,7 +952,13 @@ Rcpp::List remix_cpp(
             joint_message = std::string("Joint refinement failed; retained ECM fit: ") + e.what();
         }
     }
-    final_p = metamixture_core::sorted(final_p);
+    if (constraints.equal_mu) {
+        std::vector<int> ix(K); std::iota(ix.begin(),ix.end(),0);
+        std::stable_sort(ix.begin(),ix.end(),[&](int a,int b){return final_p.tau[a]<final_p.tau[b];});
+        metamixture_core::Params tmp(K);
+        for(int k=0;k<K;++k){tmp.mu[k]=final_p.mu[ix[k]];tmp.tau[k]=final_p.tau[ix[k]];tmp.pi[k]=final_p.pi[ix[k]];}
+        final_p=tmp;
+    } else final_p = metamixture_core::sorted(final_p);
     std::vector<double> rr;
     double final_ll_std = metamixture_core::estep(d, final_p, rr);
     double ll = d.original_ll(final_ll_std);
@@ -767,35 +988,57 @@ Rcpp::List remix_cpp(
     List ecm_estimates = metamixture_rcpp::params_list(d, metamixture_core::sorted(best.p));
     NumericVector trace(best.trace.size());
     for (std::size_t j = 0; j < best.trace.size(); ++j) trace[j] = d.original_ll(best.trace[j]);
-    int npar = 3*K - 1;
+    int npar = constraints.q;
     bool converged = joint_accepted ? (joint_code == 0) : best.converged;
     Rcpp::List out = List::create(
-      _["mu"] = estimates["mu"], _["tau2"] = estimates["tau2"], _["pi"] = estimates["pi"],
-                        _["yi"] = yi,
-                        _["vi"] = vi,
-                        _["posterior"] = posterior, _["classification"] = classification,
-                        _["effective_n"] = effective_n, _["logLik"] = ll,
-                        _["AIC"] = -2*ll + 2*npar, _["BIC"] = -2*ll + std::log(static_cast<double>(d.n))*npar,
-                        _["n"] = d.n, _["K"] = K, _["npar"] = npar, _["converged"] = converged,
-                        _["ecm"] = List::create(_["mu"] = ecm_estimates["mu"], _["tau2"] = ecm_estimates["tau2"],
-                                             _["pi"] = ecm_estimates["pi"], _["logLik"] = d.original_ll(best.ll),
-                                               _["iterations"] = best.iterations, _["converged"] = best.converged,
-                                               _["status"] = best.status, _["best_start"] = best_start, _["trace"] = trace),
-                                                 _["joint"] = List::create(_["attempted"] = joint_attempted, _["accepted"] = joint_accepted,
-                                                                      _["convergence"] = joint_code, _["message"] = joint_message,
-                                                                      _["start_logLik"] = joint_start_ll, _["logLik"] = joint_ll,
-                                                                      _["counts"] = joint_counts, _["projected_gradient_norm"] = pg_norm,
-                                                                      _["starting_weights_adjusted"] = joint_start_adjusted),
-                                                                      _["starts"] = DataFrame::create(_["start"] = start_number, _["logLik"] = start_ll,
-                                                                                                _["iterations"] = start_it, _["converged"] = start_conv,
-                                                                                                _["active_components"] = active, _["status"] = start_status),
-                                                                                                _["notes"] = notes);
+      _["mu"] = estimates["mu"],
+      _["tau2"] = estimates["tau2"],
+      _["pi"] = estimates["pi"],
+      _["yi"] = yi,
+      _["vi"] = vi,
+      _["mu_structure"] = mu,
+      _["tau2_structure"] = tau2,
+      _["posterior"] = posterior,
+      _["classification"] = classification,
+      _["effective_n"] = effective_n,
+      _["logLik"] = ll,
+      _["AIC"] = -2*ll + 2*npar,
+      _["BIC"] = -2*ll + std::log(static_cast<double>(d.n))*npar,
+      _["n"] = d.n,
+      _["K"] = K,
+      _["npar"] = npar,
+      _["converged"] = converged,
+      _["ecm"] = List::create(_["mu"] = ecm_estimates["mu"],
+      _["tau2"] = ecm_estimates["tau2"],
+      _["pi"] = ecm_estimates["pi"],
+      _["logLik"] = d.original_ll(best.ll),
+      _["iterations"] = best.iterations,
+      _["converged"] = best.converged,
+      _["status"] = best.status,
+      _["best_start"] = best_start,
+      _["trace"] = trace),
+      _["joint"] = List::create(_["attempted"] = joint_attempted,
+      _["accepted"] = joint_accepted,
+      _["convergence"] = joint_code,
+      _["message"] = joint_message,
+      _["start_logLik"] = joint_start_ll,
+      _["logLik"] = joint_ll,
+      _["counts"] = joint_counts,
+      _["projected_gradient_norm"] = pg_norm,
+      _["starting_weights_adjusted"] = joint_start_adjusted),
+      _["starts"] = DataFrame::create(_["start"] = start_number,
+            _["logLik"] = start_ll,
+            _["iterations"] = start_it,
+            _["converged"] = start_conv,
+            _["active_components"] = active,
+            _["status"] = start_status),
+      _["notes"] = notes);
 
     if (compute_se) {
         try {
             Rcpp::List se_result = metamixture_rcpp::standard_errors(
                 d, final_p, Rcpp::as<std::vector<double> >(yi),
-                se_rel_step, se_boundary_tol, converged);
+                se_rel_step, se_boundary_tol, converged, constraints);
             out["se_mu"] = se_result["se_mu"];
             out["se_tau2"] = se_result["se_tau2"];
             out["se_pi"] = se_result["se_pi"];

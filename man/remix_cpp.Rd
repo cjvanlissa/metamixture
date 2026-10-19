@@ -21,7 +21,9 @@ remix_cpp(
   keep_trace = FALSE,
   compute_se = TRUE,
   se_rel_step = 1e-04,
-  se_boundary_tol = 1e-10
+  se_boundary_tol = 1e-10,
+  mu = "varying",
+  tau2 = "varying"
 )
 }
 \arguments{
@@ -62,11 +64,16 @@ the first starting solution rather than adding an extra start.}
 \item{se_rel_step}{Relative step for numerical differentiation of the analytic score.}
 
 \item{se_boundary_tol}{Boundary tolerance; SEs are NA when regular Wald inference is inappropriate.}
+
+\item{mu}{Whether component means are \code{varying} or \code{equal}.}
+
+\item{tau2}{Whether component heterogeneity variances are \code{varying} or \code{equal}.}
 }
 \value{
 A list with component estimates mu, tau2, and pi; posterior
 probabilities and classifications; effective_n; logLik, AIC, and BIC;
 n, K, and npar; converged; ecm and joint diagnostics; starts; and notes.
+Equality-constrained estimates are repeated for all K components.
 When requested, also returns se_mu, se_tau2, se_pi, se, vcov, information,
 se_details, and se_status. On a boundary or singular fit, SEs are NA.
 Components are sorted by increasing estimated mean. The ECM and joint
@@ -84,3 +91,4 @@ argument and the function does not seed a private generator. The Rcpp
 attributes wrapper manages RNG state using an RNGScope. Multiple starts
 do not guarantee a global maximum. Estimation is ML, not REML.
 }
+\keyword{internal}

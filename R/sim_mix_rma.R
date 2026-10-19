@@ -27,7 +27,7 @@
 #'                    p_ratio = 2,
 #'                    means = c(0, 3),
 #'                    tau2 = c(0.5, 2))
-#'
+#' @importFrom stats var
 #' @export
 sim_mix_rma <- function(n = 100L, vi_range = c(.01, .10), classes = 2L, p_ratio = 1L, r2 = NULL, means = seq(from = 0, by = .2, length.out = classes), tau2 = rep(.1, classes)){
   ps <- c(p_ratio, rep(1, classes-1L))
@@ -40,7 +40,7 @@ sim_mix_rma <- function(n = 100L, vi_range = c(.01, .10), classes = 2L, p_ratio 
   if(is.null(r2)){
     sigma_error <- sqrt(tau2)[C]
   } else {
-    sigma_error <- sqrt(var(f_x) * (1 - r2) / r2)
+    sigma_error <- sqrt(stats::var(f_x) * (1 - r2) / r2)
   }
   vi <- runif(n, min = vi_range[1], max = vi_range[2])
   y <- f_x + rnorm(n, sd = (sigma_error + sqrt(vi)))

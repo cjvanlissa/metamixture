@@ -8,6 +8,8 @@ remix(
   yi,
   vi,
   classes = 2L,
+  mu = c("varying", "equal"),
+  tau2 = c("varying", "equal"),
   method = c("cpp", "OpenMx"),
   run = TRUE,
   options = list()
@@ -20,6 +22,11 @@ remix(
 
 \item{classes}{Integer vector specifying the number of mixture
 classes to fit. Defaults to \code{1L:2L}.}
+
+\item{mu}{Whether component means are \code{varying} or \code{equal}.}
+
+\item{tau2}{Whether component heterogeneity variances are \code{varying} or
+\code{equal}.}
 
 \item{method}{Estimation method: \code{"cpp"} or \code{"OpenMx"}.}
 

@@ -1,51 +1,7 @@
-results_function <- function(df, res){
-
-
-  ## lazy-blrt
-  select_these <- lower.tri(matrix(ncol = ncol(dat), nrow = ncol(dat)))
-  dat_stat = cor(dat)[select_these]
-  mr_dat <- mr(dat_stat)
-  rep_stat <- do.call(rbind, lapply(res, function(thisres) { replicate(reps, {
-    sims <- mclust::sim(modelName = thisres$modelName,
-                        parameters = thisres$parameters,
-                        n = nrow(dat))[, -1, drop = FALSE]
-    cr_sim <- cor(sims)[select_these]
-    ## srrmr
-    sr <- srmr(dat_stat, cr_sim)
-    ## mr
-    mm <- mr(cr_sim)
-    c(mm = mm, srmr = sr)
-  })}))
-
-  dif_sr <- rep_stat[seq(from = 4, to = nrow(rep_stat), by = 2), ] - rep_stat[seq(from = 2, to = (nrow(rep_stat)-2), by = 2), ]
-  dif_mr <- rep_stat[seq(from = 3, to = nrow(rep_stat), by = 2), ] - rep_stat[seq(from = 1, to = (nrow(rep_stat)-2), by = 2), ]
-
-  ### compile results
-  c(
-    rowMeans(rep_stat),
-    apply(rep_stat, 1, sd),
-    as.vector(apply(rep_stat, 1, quantile, probs = c(.025, .975))),
-    rowMeans(rep_stat[seq(from = 2, to = nrow(rep_stat), by = 2), ] < .1),
-    rowMeans(rep_stat[seq(from = 1, to = nrow(rep_stat), by = 2), ] - mr_dat),
-    rowMeans(rep_stat[seq(from = 1, to = nrow(rep_stat), by = 2), ] > mr_dat),
-    rowMeans(dif_sr),
-    as.vector(apply(dif_sr, 1, quantile, probs = c(.025, .975))),
-    rowMeans(dif_sr < 0),
-    rowMeans(dif_mr),
-    as.vector(apply(dif_mr, 1, quantile, probs = c(.025, .975))),
-    rowMeans(dif_mr < 0),
-    blrt$p.value,
-    sapply(res, AIC),
-    sapply(res, BIC),
-    ic_ci[seq(1, length(ic_ci), 2)],
-    ic_ci[seq(2, length(ic_ci), 2)])
-}
-
-
 # Load packages
-packagenames <- c('metamixture', 'OpenMx', 'tidySEM', 'foreach')
+packagenames <- c('metamixture', 'OpenMx', 'tidySEM', 'foreach', 'OpenMx')
 lapply(packagenames, library, character.only = TRUE)
-num_sims = 10
+num_sims = 10000
 # Check package versions
 # Which packages require correct versions and which versions are they?--------------------------------------------------
 
@@ -58,11 +14,12 @@ for (i in 2:length(seeds)) {
   seeds[[i]] <- parallel::nextRNGStream(seeds[[i - 1]])
 }
 # Create grid with simulation parameters and save it
+#erp <- readxl::read_xlsx("paper/jopd-5-33-s2.xlsx")
 summarydata <- do.call(rbind, lapply(1:num_sims, function(i){
   # Set seed
   .Random.seed <- seeds[i][[1]]
   data.frame(#Number of studies per dataset
-    k = round(exp(runif(1, min = log(20), max = log(100)))),
+    k = round(exp(runif(1, min = log(10), max = log(300)))),
     classes = sample.int(3, size = 1),
     # vi value
     vi = runif(1, min = .01, max = .1),
@@ -72,69 +29,75 @@ summarydata <- do.call(rbind, lapply(1:num_sims, function(i){
   )
 }))
 summarydata$seed <- seeds
-saveRDS(summarydata, file = "summarydata.RData")
+saveRDS(summarydata, file = "paper/summarydata.RData")
 
 sim_data <- function(k, classes, p_ratio, vi, r2){
   ps <- c(p_ratio, rep(1, classes-1L))
   ps <- ps/sum(ps)
   C <- sample(seq_len(classes), size = k, replace = TRUE, prob = ps)
   f_x <- (C-1L)
-  sigma_error <- sqrt(var(f_x) * (1 - r2) / r2)
+  tau2_error <- (var(f_x) * (1 - r2) / r2)
   vi <- runif(k, min = 0, max = vi)
-  y <- f_x + rnorm(k, sd = sigma_error + sqrt(vi))
-  data.frame(yi = y, vi = vi, C = C, tau2 = sigma_error[1])
+  y <- f_x + rnorm(k, sd = (sqrt(tau2_error) + sqrt(vi)))
+  data.frame(yi = y, vi = vi, C = C, tau2 = tau2_error[1])
 }
-
 
 
 library(doSNOW)
 library(foreach)
-cl<-makeCluster(30) #change the 2 to your number of CPU cores
+write(as.character(Sys.time()), file = "paper/results/time.log", append = TRUE, append = TRUE)
+cl<-makeCluster((parallel::detectCores()-2L)) #change the 2 to your number of CPU cores
 registerDoSNOW(cl)
 
 # Run a random sample of test iterations
 #summarydata <- summarydata[sample.int(nrow(summarydata), 4, replace = FALSE), ]
-f <- list.files("./simulation_2026/results", full.names = TRUE)
+f <- list.files("paper/results", full.names = TRUE)
 file.remove(f)
 max_classes <- max(summarydata$classes)+1L
 foreach(rownum = 1:nrow(summarydata), .packages = c("pema", "sn", "rstan", "glmnet"), .final = function(x) NULL) %dopar% {
   # rownum <- sample.int(nrow(summarydata), 1L)
+  # summarydata[rownum, -ncol(summarydata)]
+
   .Random.seed <- seeds[rownum][[1]]
   # create dataframe for each group
   df <- with(as.list(summarydata[rownum, ]), {
     sim_data(k = k, classes = classes, p_ratio = p_ratio, vi = vi, r2 = r2)
   })
+  #plot(density(df$yi))
   tstart <- Sys.time()
-  res_mx <- remix(df$yi, df$vi, classes = 1:max_classes, method = "OpenMx")
+  res_mx <- lapply(1:max_classes, metamixture:::remix_mx, yi = df$yi, vi = df$vi, mu = "varying",
+                   tau2 = "equal", run = TRUE)
   time_mx <- as.numeric(Sys.time() - tstart)
   tstart <- Sys.time()
-  res_cpp <- remix(yi = df$yi, vi = df$vi, classes = 1:max_classes, method = "cpp")
+  res_cpp <- lapply(1:max_classes, metamixture:::remix_cpp, yi = df$yi, vi = df$vi, tau2 = "equal")
   time_cpp <- as.numeric(Sys.time() - tstart)
 
   fits_mx <- table_fit(res_mx)
   aic_mx <- which.min(fits_mx$AIC)
   bic_mx <- which.min(fits_mx$BIC)
-  pmcs <- metamixture:::pmc(res_mx)
+  pmcs <- metamixture:::pmc_mx(res_mx)
   pmc_mx <- sum(cumprod(rowSums(sign(pmcs[1:(max_classes-1L),c("lb", "ub")])) == -2))+1L
 
   aic_cpp <- which.min(sapply(res_cpp, `[[`, "AIC"))
   bic_cpp <- which.min(sapply(res_cpp, `[[`, "BIC"))
-  pmcs <- metamixture:::pmc(res_cpp)
+  names(res_cpp) <- paste0("class", seq_len(length(res_cpp)))
+  pmcs <- metamixture:::pmc_cpp(res_cpp)
   pmc_cpp <- sum(cumprod(rowSums(sign(pmcs[1:(max_classes-1L),c("lb", "ub")])) == -2))+1L
   # Bias
 
-  out <- c(rownum, aic_mx, bic_mx, pmc_mx, time_mx, aic_cpp, bic_cpp, pmc_cpp, time_cpp,
-           mu_bias_mx = res_mx[[summarydata$classes[rownum]]]$Mu1$values[1,1],
-           tau2_bias_mx = res_mx[[summarydata$classes[rownum]]]$Tau1$values[1,1] - df$tau2[1]
+  out <- c(rownum, aic_mx, bic_mx, pmc_mx, time_mx,
+           res_mx[[summarydata$classes[rownum]]]$Mu1$values[1,1],
+           res_mx[[summarydata$classes[rownum]]]$Tau1$values[1,1] - df$tau2[1],
+           aic_cpp, bic_cpp, pmc_cpp, time_cpp,
+           res_cpp[[summarydata$classes[rownum]]]$mu[1],
+           res_cpp[[summarydata$classes[rownum]]]$tau2[1] - df$tau2[1]
            )
-  write.table(x = t(out), file = sprintf("./simulation_2026/results/out_%d.txt" , Sys.getpid()), sep = "\t", append = TRUE, row.names = FALSE, col.names = FALSE)
+  write.table(x = t(out), file = sprintf("paper/results/out_%d.txt" , Sys.getpid()), sep = "\t", append = TRUE, row.names = FALSE, col.names = FALSE)
 }
-
+write(as.character(Sys.time()), file = "paper/results/time.log", append = TRUE)
 #Close cluster
 stopCluster(cl)
-
-#Close cluster
-stopCluster(cl)
+rm(cl)
 ## stop("End of simulation")
 
 save.image(paste0("tab", Sys.Date(), ".RData"))

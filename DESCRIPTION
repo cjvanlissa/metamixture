@@ -23,3 +23,7 @@ Imports:
     Rcpp
 LinkingTo: 
     Rcpp
+Suggests: 
+    testthat (>= 3.0.0),
+    future.apply
+Config/testthat/edition: 3

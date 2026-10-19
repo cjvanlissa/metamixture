@@ -3,6 +3,7 @@ pmc <- function(x, ..., reps = 100, ci = .95){
   pmc_cpp(x = x, reps = reps, ci = ci, ...)
 }
 
+#' @importFrom stats median
 pmc_mx <- function(x, ..., reps = 100, ci = .95){
   if (length(x) < 2L) {
     stop("At least two models are required.")
@@ -33,7 +34,7 @@ pmc_mx <- function(x, ..., reps = 100, ci = .95){
     }
   })
   # Get summary statistics and prepare output
-  meds <- apply(rep_stat, 2, median)
+  meds <- apply(rep_stat, 2, stats::median)
   names(meds) <- nams
   cis <- list(
     dif_seq = rep_stat[, 2:dim(rep_stat)[2], drop = FALSE] - rep_stat[, 1:(dim(rep_stat)-1L)[2], drop = FALSE],
@@ -54,6 +55,7 @@ pmc_mx <- function(x, ..., reps = 100, ci = .95){
   return(out)
 }
 
+#' @importFrom stats median
 pmc_cpp <- function(x, ..., reps = 100, ci = .95){
   if (length(x) < 2L) {
     stop("At least two models are required.")
@@ -84,7 +86,7 @@ pmc_cpp <- function(x, ..., reps = 100, ci = .95){
     }
   })
   # Get summary statistics and prepare output
-  meds <- apply(rep_stat, 2, median)
+  meds <- apply(rep_stat, 2, stats::median)
   names(meds) <- nams
   cis <- list(
     dif_seq = rep_stat[, 2:dim(rep_stat)[2], drop = FALSE] - rep_stat[, 1:(dim(rep_stat)-1L)[2], drop = FALSE],

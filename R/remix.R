@@ -16,6 +16,9 @@
 #' @param vi Numeric vector of known sampling variances.
 #' @param classes Integer vector specifying the number of mixture
 #' classes to fit. Defaults to \code{1L:2L}.
+#' @param mu Whether component means are `varying` or `equal`.
+#' @param tau2 Whether component heterogeneity variances are `varying` or
+#' `equal`.
 #' @param method Estimation method: `"cpp"` or `"OpenMx"`.
 #' @param run Logical. If \code{TRUE} (the default), the model is
 #' estimated using OpenMx. If \code{FALSE}, the unestimated
@@ -53,7 +56,11 @@
 #' R-Package tidySEM. Structural Equation Modeling.
 #' \doi{10.1080/10705511.2023.2250920}
 #' @export
-remix <- function(yi, vi, classes = 2L,
+remix <- function(yi,
+                  vi,
+                  classes = 2L,
+                  mu = c("varying", "equal"),
+                  tau2 = c("varying", "equal"),
                   method = c("cpp", "OpenMx"),
                   run = TRUE,
                   options = list()) {
@@ -71,6 +78,8 @@ remix <- function(yi, vi, classes = 2L,
       yi = yi,
       vi = vi,
       classes = classes,
+      mu = c("varying", "equal"),
+      tau2 = c("varying", "equal"),
       run = run
     ))
   }
@@ -94,7 +103,7 @@ remix <- function(yi, vi, classes = 2L,
   fit_one <- function(k) {
     do.call(
       remix_cpp,
-      c(list(yi = yi, vi = vi, K = k), options)
+      c(list(yi = yi, vi = vi, K = k, mu = mu, tau2 = tau2), options)
     )
   }
 

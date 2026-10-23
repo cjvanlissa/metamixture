@@ -50,11 +50,11 @@ remix_starts <- function(model,
   p_start <- as.numeric(tab_split) / sum(tab_split)
   model@matrices$Eta$values[1, ] <- p_to_eta(p_start)
 
-  strts <- try(OpenMx::mxRun(model, silent = TRUE, suppressWarnings = TRUE), silent = TRUE)
+  strts <- try(OpenMx::mxRun(model, intervals = FALSE, silent = TRUE, suppressWarnings = TRUE), silent = TRUE)
   if(inherits(strts, "try-error")){
     if(grepl("omxAssignFirstParameters", attr(strts, "condition"), fixed = TRUE)){
       strts <- try(OpenMx::omxAssignFirstParameters(model), silent = TRUE)
-      strts <- try(OpenMx::mxRun(strts, silent = TRUE, suppressWarnings = TRUE))
+      strts <- try(OpenMx::mxRun(strts, intervals = FALSE, silent = TRUE, suppressWarnings = TRUE))
     } else {
       strts <- try(OpenMx::mxTryHard(model, extraTries = 100,
                                           silent = TRUE,

@@ -248,13 +248,13 @@ remix_mx <- function(yi, vi,
 
     if (run) {
       model <- OpenMx::mxModel(model, OpenMx::mxComputeSimAnnealing())
-      res <- suppressWarnings(try(OpenMx::mxRun(model, silent = TRUE), silent = TRUE))
+      res <- suppressWarnings(try(OpenMx::mxRun(model, intervals = FALSE, silent = TRUE), silent = TRUE))
       if(!inherits(res, what = "try-error")){
         model <- res
         model@compute <- NULL
       }
       model <- OpenMx::mxRun(
-        model, intervals = intervals
+        model, intervals = TRUE
       )
     }
     attr(model, "tidySEM") <- "mixture"

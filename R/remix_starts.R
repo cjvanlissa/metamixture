@@ -47,7 +47,8 @@ remix_starts <- function(model,
     model@matrices[[paste0("Mu", i)]]$values[1,1] <- res_ma["mu"]
     model@matrices[[paste0("Tau", i)]]$values[1,1] <- res_ma["tau2"]
   }
-  model@matrices$Eta$values[1, ] <- p_to_eta(p_from_parameters(model))
+  p_start <- as.numeric(tab_split) / sum(tab_split)
+  model@matrices$Eta$values[1, ] <- p_to_eta(p_start)
 
   strts <- try(OpenMx::mxRun(model, silent = TRUE, suppressWarnings = TRUE), silent = TRUE)
   if(inherits(strts, "try-error")){

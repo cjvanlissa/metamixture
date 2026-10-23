@@ -4,6 +4,8 @@ remix_mx <- function(yi, vi,
                      tau2 = c("varying", "equal"),
                      run = TRUE) {
   intervals = TRUE
+  mu <- match.arg(mu)
+  tau2 <- match.arg(tau2)
 
   if (!requireNamespace("OpenMx", quietly = TRUE)) {
     stop("Package 'OpenMx' is required.")
@@ -15,7 +17,7 @@ remix_mx <- function(yi, vi,
   }
   if(length(classes) > 1){
     out <- lapply(classes, function(i){
-      remix_mx(yi = yi, vi = vi, classes = i, run = run)
+      remix_mx(yi = yi, vi = vi, classes = i, mu = mu, tau2 = tau2, run = run)
     })
     attr(out, "tidySEM") <- "list"
     class(out) <- c("mixture_list", class(out))
@@ -87,7 +89,7 @@ remix_mx <- function(yi, vi,
         OpenMx::mxMatrix(
           type = "Full", nrow = 1, ncol = 1,
           free = TRUE, values = start_tau2[k],
-          lbound = 1e-7,
+          lbound = 0,
           ubound = max_tau2,
           labels = ifelse(tau2 == "varying", paste0("tau2_", k), "tau2"),
           name = tau_name
@@ -134,6 +136,8 @@ remix_mx <- function(yi, vi,
           nrow = 1, ncol = classes - 1L,
           free = TRUE,
           values = log(start_pi[seq_len(classes - 1L)] / start_pi[classes]),
+          lbound = -10,
+          ubound = 10,
           labels = paste0("eta", seq_len(classes - 1L)),
           name = "Eta"
         )

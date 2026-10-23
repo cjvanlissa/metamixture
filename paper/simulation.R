@@ -1,98 +1,435 @@
 # Load packages
-packagenames <- c('metamixture', 'OpenMx', 'tidySEM', 'foreach', 'OpenMx')
+packagenames <- c('metamixture', 'OpenMx', 'mclust','tidySEM', 'foreach', 'OpenMx')
 lapply(packagenames, library, character.only = TRUE)
-num_sims = 10000
-# Check package versions
-# Which packages require correct versions and which versions are they?--------------------------------------------------
+
+# Fixed number, random parameters
+# num_sims = (parallel::detectCores()-2L)
+# RNGkind("L'Ecuyer-CMRG") # 1. RNG capable of creating multiple streams
+# set.seed(9148)
+# seeds <- vector("list", num_sims)
+# seeds[[1]] <- .Random.seed
+# for (i in 2:length(seeds)) {
+#   seeds[[i]] <- parallel::nextRNGStream(seeds[[i - 1]])
+# }
+# summarydata <- do.call(rbind, lapply(1:num_sims, function(i){
+#   # Set seed
+#   .Random.seed <- seeds[i][[1]]
+#   data.frame(#Number of studies per dataset
+#     k = round(exp(runif(1, min = log(200), max = log(300)))),
+#     classes = sample.int(3, size = 1),
+#     # vi value
+#     vi = runif(1, min = .01, max = .1),
+#     #Effect size
+#     r2 = runif(1, min = 0, max = .8),
+#     p_ratio = exp(runif(1, min = log(1), max = log(3)))
+#   )
+# }))
+# summarydata$seed <- seeds
+
+
+# Factorial design
+hyper_parameters <- list(
+  reps = 1,
+  k = c(20, 50, 100, 300),
+  classes = c(2L:3L),
+  vi = c(.001, .01, .1),
+  r2 = c(.2, .6, .8),
+  p_ratio = c(1, 1.5))
+summarydata <- expand.grid(hyper_parameters, stringsAsFactors = FALSE)
+hyper_parameters <- list(
+  reps = 1,
+  k = c(20, 50, 100, 300),
+  classes = 1L,
+  vi = c(.001, .01, .1),
+  r2 = NA_real_,
+  p_ratio = 1)
+summarydata_oneclass <- expand.grid(hyper_parameters, stringsAsFactors = FALSE)
+summarydata <- rbind(summarydata, summarydata_oneclass)
+summarydata$rownum <- 1:nrow(summarydata)
 
 # Prepare seeds
 RNGkind("L'Ecuyer-CMRG") # 1. RNG capable of creating multiple streams
-set.seed(9148)
-seeds <- vector("list", num_sims)
+set.seed(824)
+seeds <- vector("list", nrow(summarydata))
 seeds[[1]] <- .Random.seed
 for (i in 2:length(seeds)) {
   seeds[[i]] <- parallel::nextRNGStream(seeds[[i - 1]])
 }
-# Create grid with simulation parameters and save it
-#erp <- readxl::read_xlsx("paper/jopd-5-33-s2.xlsx")
-summarydata <- do.call(rbind, lapply(1:num_sims, function(i){
-  # Set seed
-  .Random.seed <- seeds[i][[1]]
-  data.frame(#Number of studies per dataset
-    k = round(exp(runif(1, min = log(10), max = log(300)))),
-    classes = sample.int(3, size = 1),
-    # vi value
-    vi = runif(1, min = .01, max = .1),
-    #Effect size
-    r2 = runif(1, min = 0, max = .8),
-    p_ratio = exp(runif(1, min = log(1), max = log(3)))
-  )
-}))
 summarydata$seed <- seeds
 saveRDS(summarydata, file = "paper/summarydata.RData")
 
-sim_data <- function(k, classes, p_ratio, vi, r2){
-  ps <- c(p_ratio, rep(1, classes-1L))
-  ps <- ps/sum(ps)
-  C <- sample(seq_len(classes), size = k, replace = TRUE, prob = ps)
-  f_x <- (C-1L)
-  tau2_error <- (var(f_x) * (1 - r2) / r2)
-  vi <- runif(k, min = 0, max = vi)
-  y <- f_x + rnorm(k, sd = (sqrt(tau2_error) + sqrt(vi)))
-  data.frame(yi = y, vi = vi, C = C, tau2 = tau2_error[1])
-}
+sim_data <- function(k, classes, p_ratio, vi, r2) {
+  ps <- c(p_ratio, rep(1, classes - 1L))
+  ps <- ps / sum(ps)
+  mu <- seq_len(classes) - 1L
+  pop_mean <- sum(ps * mu)
+  pop_var <- sum(ps * (mu - pop_mean)^2)
 
+  # Residual heterogeneity, fix for classes = 1 or r2 = 0
+  if (classes == 1L) {
+    tau2_error <- 1
+  } else if (r2 == 0) {
+    tau2_error <- 1
+  } else {
+    tau2_error <- pop_var * (1 - r2) / r2
+  }
+
+  C <- sample(seq_len(classes), size = k, replace = TRUE, prob = ps)
+
+  # Sampling variances
+  vi_indiv <- runif(k, min = 0, max = vi * tau2_error)
+
+  # Generate observed effects
+  y <- mu[C] + rnorm(k, sd = sqrt(tau2_error + vi_indiv))
+
+  data.frame(yi = y, vi = vi_indiv, C = C, tau2 = tau2_error)
+}
 
 library(doSNOW)
 library(foreach)
-write(as.character(Sys.time()), file = "paper/results/time.log", append = TRUE, append = TRUE)
 cl<-makeCluster((parallel::detectCores()-2L)) #change the 2 to your number of CPU cores
 registerDoSNOW(cl)
 
 # Run a random sample of test iterations
-#summarydata <- summarydata[sample.int(nrow(summarydata), 4, replace = FALSE), ]
+#summarydata <- summarydata[sample.int(nrow(summarydata), length(cl), replace = FALSE), ]
 f <- list.files("paper/results", full.names = TRUE)
 file.remove(f)
+write(as.character(Sys.time()), file = "paper/results/time.log", append = TRUE)
 max_classes <- max(summarydata$classes)+1L
-foreach(rownum = 1:nrow(summarydata), .packages = c("pema", "sn", "rstan", "glmnet"), .final = function(x) NULL) %dopar% {
+foreach(rownum = 1:nrow(summarydata), .packages = c("mclust", "metamixture", "OpenMx", "tidySEM"), .errorhandling = "remove", .final = function(x) NULL) %dopar% {
   # rownum <- sample.int(nrow(summarydata), 1L)
   # summarydata[rownum, -ncol(summarydata)]
 
-  .Random.seed <- seeds[rownum][[1]]
+  .Random.seed <- summarydata$seed[rownum][[1]]
   # create dataframe for each group
   df <- with(as.list(summarydata[rownum, ]), {
     sim_data(k = k, classes = classes, p_ratio = p_ratio, vi = vi, r2 = r2)
   })
-  #plot(density(df$yi))
-  tstart <- Sys.time()
-  res_mx <- lapply(1:max_classes, metamixture:::remix_mx, yi = df$yi, vi = df$vi, mu = "varying",
-                   tau2 = "equal", run = TRUE)
-  time_mx <- as.numeric(Sys.time() - tstart)
-  tstart <- Sys.time()
-  res_cpp <- lapply(1:max_classes, metamixture:::remix_cpp, yi = df$yi, vi = df$vi, tau2 = "equal")
-  time_cpp <- as.numeric(Sys.time() - tstart)
+  true_k <- summarydata$classes[rownum]
+  true_pi <- summarydata$p_ratio[rownum] / (summarydata$p_ratio[rownum] + true_k - 1L)
 
-  fits_mx <- table_fit(res_mx)
-  aic_mx <- which.min(fits_mx$AIC)
-  bic_mx <- which.min(fits_mx$BIC)
-  pmcs <- metamixture:::pmc_mx(res_mx)
-  pmc_mx <- sum(cumprod(rowSums(sign(pmcs[1:(max_classes-1L),c("lb", "ub")])) == -2))+1L
+  # Mclust
+  mc_try <- try({
 
-  aic_cpp <- which.min(sapply(res_cpp, `[[`, "AIC"))
-  bic_cpp <- which.min(sapply(res_cpp, `[[`, "BIC"))
-  names(res_cpp) <- paste0("class", seq_len(length(res_cpp)))
-  pmcs <- metamixture:::pmc_cpp(res_cpp)
-  pmc_cpp <- sum(cumprod(rowSums(sign(pmcs[1:(max_classes-1L),c("lb", "ub")])) == -2))+1L
-  # Bias
+    res_mc <- lapply(
+      seq_len(max_classes),
+      mclust::Mclust,
+      data = df$yi,
+      modelNames = "E"
+    )
 
-  out <- c(rownum, aic_mx, bic_mx, pmc_mx, time_mx,
-           res_mx[[summarydata$classes[rownum]]]$Mu1$values[1,1],
-           res_mx[[summarydata$classes[rownum]]]$Tau1$values[1,1] - df$tau2[1],
-           aic_cpp, bic_cpp, pmc_cpp, time_cpp,
-           res_cpp[[summarydata$classes[rownum]]]$mu[1],
-           res_cpp[[summarydata$classes[rownum]]]$tau2[1] - df$tau2[1]
-           )
-  write.table(x = t(out), file = sprintf("paper/results/out_%d.txt" , Sys.getpid()), sep = "\t", append = TRUE, row.names = FALSE, col.names = FALSE)
+    # Mclust BIC is reverse-coded
+    bic_mc <- which.max(sapply(res_mc, `[[`, "bic"))
+    icl_mc <- which.min(sapply(res_mc, metamixture:::icl_mclust))
+
+    pmcs <- metamixture:::pmc_mc(res_mc)
+    pmc_mc <- sum(cumprod(
+      rowSums(sign(pmcs[seq_len(max_classes - 1L),
+                        c("lb", "ub"), drop = FALSE])) == -2
+    )) + 1L
+
+    min_mu_mc <- which.min(res_mc[[true_k]]$parameters$mean)
+
+    bias_mu_mc <- res_mc[[true_k]]$parameters$mean[min_mu_mc]
+    bias_tau_mc <- (res_mc[[true_k]]$parameters$variance$sigmasq - df$tau2[1])
+    bias_pi_mc <- (res_mc[[true_k]]$parameters$pro[min_mu_mc] - true_pi)
+
+    # Bootstrap separately: failure does not invalidate other results
+    ses <- try(
+      mclust::MclustBootstrap(
+        res_mc[[true_k]],
+        nboot = 100,
+        type = "bs"
+      ),
+      silent = TRUE
+    )
+
+    if (!inherits(ses, "try-error")) {
+
+      ses_summary <- summary(ses, what = "se")
+
+      cov_mu_mc <- res_mc[[true_k]]$parameters$mean[min_mu_mc] +
+        c(-1.96, 1.96) * ses_summary$mean[min_mu_mc]
+      cov_mu_mc <- sum(sign(cov_mu_mc)) == 0
+
+      cov_tau_mc <- res_mc[[true_k]]$parameters$variance$sigmasq +
+        c(-1.96, 1.96) * drop(ses_summary$variance)[1]
+      cov_tau_mc <- sum(sign(cov_tau_mc - df$tau2[1])) == 0
+
+      cov_pi_mc <- sum(sign(
+        quantile(ses$pro[, min_mu_mc], c(.025, .975), na.rm = TRUE) - true_pi
+      )) == 0
+      if(true_k == 1L) bias_pi_mc <- cov_pi_mc <- NA
+
+    } else {
+      cov_mu_mc <- cov_tau_mc <- cov_pi_mc <- NA
+    }
+  }, silent = TRUE)
+
+  if (inherits(mc_try, "try-error")) {
+    bic_mc <- icl_mc <- pmc_mc <- NA_real_
+    cov_mu_mc <- cov_tau_mc <- cov_pi_mc <- NA
+    bias_mu_mc <- bias_tau_mc <- bias_pi_mc <- NA
+  }
+
+
+  # OPENMX
+  mx_try <- try({
+    tstart <- Sys.time()
+    res_mx <- lapply(
+      seq_len(max_classes),
+      metamixture:::remix_mx,
+      yi = df$yi,
+      vi = df$vi,
+      mu = "varying",
+      tau2 = "equal",
+      run = TRUE
+    )
+    time_mx <- as.numeric(
+      difftime(Sys.time(), tstart, units = "secs")
+    )
+
+    conv_mx <- sapply(
+      res_mx,
+      function(x) metamixture:::mx_convergence(x)$checks_pass
+    )
+    if(any(!conv_mx)){
+      tstart <- Sys.time()
+      res_mx[which(!conv_mx)] <- lapply(
+        which(!conv_mx), function(i){
+          metamixture:::random_starts(res_mx[[i]])
+        })
+      time_mx <- time_mx + as.numeric(
+        difftime(Sys.time(), tstart, units = "secs")
+      )
+      conv_mx <- sapply(
+        res_mx,
+        function(x) metamixture:::mx_convergence(x)$checks_pass
+      )
+    }
+
+    valid_mx <- seq_len(sum(cumprod(conv_mx)))
+
+    if (length(valid_mx) > 0L) {
+      aic_mx <- which.min(sapply(res_mx[valid_mx], function(x) {
+        tryCatch(
+          x@output$Minus2LogLikelihood +
+            2 * length(x@output$estimate),
+          error = function(e) Inf
+        )
+      }))
+
+      bic_mx <- which.min(sapply(res_mx[valid_mx], function(x) {
+        tryCatch(
+          x@output$Minus2LogLikelihood +
+            log(x@data$numObs) * length(x@output$estimate),
+          error = function(e) Inf
+        )
+      }))
+
+      icl_mx <- which.min(
+        sapply(res_mx[valid_mx], metamixture:::icl_mx)
+      )
+
+      if (length(valid_mx) > 1L) {
+        pmcs <- metamixture:::pmc_mx(res_mx[valid_mx])
+        pmcs <- pmcs[1L:(length(valid_mx)-1L), , drop = FALSE]
+
+        pmc_mx <- sum(cumprod(
+          rowSums(sign(pmcs[, c("lb", "ub"), drop = FALSE])) == -2
+        )) + 1L
+      } else {
+        pmc_mx <- 1L
+      }
+
+    } else {
+      pmc_mx <- aic_mx <- bic_mx <- icl_mx <- NA
+    }
+
+    # Parameter estimates and coverage for the true model
+    if (true_k %in% valid_mx) {
+      m2ll_mx <- res_mx[[true_k]]@output$Minus2LogLikelihood
+      min_mu_mx <- which.min(
+        sapply(seq_len(true_k), function(i) {
+          res_mx[[true_k]][[paste0("Mu", i)]]$values[1, 1]
+        })
+      )
+
+      cov_mu_mx <- res_mx[[true_k]][[paste0("Mu", min_mu_mx)]]$values[1, 1] +
+        c(-1.96, 1.96) *
+        res_mx[[true_k]]@output$standardErrors[paste0("mu", min_mu_mx), 1]
+      cov_mu_mx <- sum(sign(cov_mu_mx)) == 0
+
+      cov_tau_mx <- res_mx[[true_k]]$Tau1$values[1, 1] +
+        c(-1.96, 1.96) *
+        res_mx[[true_k]]@output$standardErrors["tau2", 1]
+      cov_tau_mx <- sum(sign(cov_tau_mx - df$tau2[1])) == 0
+
+      # Extract mixing proportion
+      if(true_k > 1L){
+        res_mx_pi <- res_mx[[true_k]]$weights$result[1, min_mu_mx]
+        cov_pi_mx <- sum(sign(
+          res_mx_pi +
+            c(-1.96, 1.96) *
+            OpenMx::mxSE("weights", res_mx[[true_k]])[1, min_mu_mx] -
+            true_pi
+        )) == 0
+        bias_pi_mx <- (res_mx_pi - true_pi)
+      } else {
+        bias_pi_mx <- cov_pi_mx <- NA
+      }
+      bias_mu_mx <- res_mx[[true_k]][[paste0("Mu", min_mu_mx)]]$values[1,1]
+      bias_tau_mx <- (res_mx[[true_k]]$Tau1$values[1,1] - df$tau2[1])
+    } else {
+      m2ll_mx <- NA
+      cov_mu_mx <- cov_tau_mx <- cov_pi_mx <- NA
+      bias_mu_mx <- bias_tau_mx <- bias_pi_mx <- NA
+    }
+
+  }, silent = TRUE)
+
+
+  if (inherits(mx_try, "try-error")) {
+    time_mx <- m2ll_mx <- NA
+    aic_mx <- bic_mx <- icl_mx <- pmc_mx <- NA_real_
+    cov_mu_mx <- cov_tau_mx <- cov_pi_mx <- NA
+    bias_mu_mx <- bias_tau_mx <- bias_pi_mx <- NA
+    valid_mx <- integer(0)
+  }
+
+
+  # C++
+  cpp_try <- try({
+    tstart <- Sys.time()
+    res_cpp <- lapply(
+      seq_len(max_classes),
+      metamixture:::remix_cpp,
+      yi = df$yi,
+      vi = df$vi,
+      tau2 = "equal"
+    )
+    time_cpp <- as.numeric(
+      difftime(Sys.time(), tstart, units = "secs")
+    )
+
+    conv_cpp <- sapply(
+      res_cpp,
+      function(x) metamixture:::check_convergence_cpp(x)$checks_pass
+    )
+
+    valid_cpp <- seq_len(sum(cumprod(conv_cpp)))
+
+    if (length(valid_cpp) > 0L) {
+
+      aic_cpp <- which.min(
+        sapply(res_cpp[valid_cpp], `[[`, "AIC")
+      )
+
+      bic_cpp <- which.min(
+        sapply(res_cpp[valid_cpp], `[[`, "BIC")
+      )
+
+      icl_cpp <- which.min(
+        sapply(res_cpp[valid_cpp], metamixture:::icl_cpp)
+      )
+
+      if (length(valid_cpp) > 1L) {
+        pmcs <- metamixture:::pmc_cpp(res_cpp[valid_cpp])
+        pmcs <- pmcs[1L:(length(valid_cpp)-1L), , drop = FALSE]
+        pmc_cpp <- sum(cumprod(
+          rowSums(sign(pmcs[, c("lb", "ub"), drop = FALSE])) == -2
+        )) + 1L
+      } else {
+        pmc_cpp <- 1L
+      }
+    } else {
+      aic_cpp <- bic_cpp <- icl_cpp <- pmc_cpp <- NA
+    }
+
+    # Parameter coverage for the true model
+    if (true_k %in% valid_cpp) {
+      m2ll_cpp <- (-2*res_cpp[[true_k]]$logLik)
+
+      cov_mu_cpp <- res_cpp[[true_k]]$mu[1L] +
+        c(-1.96, 1.96) * res_cpp[[true_k]]$se_mu[1L]
+
+      cov_mu_cpp <- sum(sign(cov_mu_cpp)) == 0
+
+      cov_tau_cpp <- res_cpp[[true_k]]$tau2[1] +
+        c(-1.96, 1.96) * res_cpp[[true_k]]$se_tau2[1]
+
+      cov_tau_cpp <- sum(sign(cov_tau_cpp - df$tau2[1])) == 0
+
+      cov_pi_cpp <- res_cpp[[true_k]]$pi[1] +
+        c(-1.96, 1.96) * res_cpp[[true_k]]$se_pi[1]
+
+      cov_pi_cpp <- sum(sign(cov_pi_cpp - true_pi)) == 0
+
+      bias_mu_cpp <- res_cpp[[true_k]]$mu[1L]
+      bias_tau_cpp <- (res_cpp[[true_k]]$tau2[1] - df$tau2[1])
+      bias_pi_cpp <- (res_cpp[[true_k]]$pi[1] - true_pi)
+      if(true_k == 1L) bias_pi_cpp <- cov_pi_cpp <- NA
+
+    } else{
+      m2ll_cpp <- bias_mu_cpp <- bias_tau_cpp <- bias_pi_cpp <- cov_mu_cpp <- cov_tau_cpp <- cov_pi_cpp <- NA
+    }
+
+  }, silent = TRUE)
+
+
+
+  if (inherits(cpp_try, "try-error")) {
+    time_cpp <- NA
+    aic_cpp <- bic_cpp <- icl_cpp <- pmc_cpp <- NA_real_
+    m2ll_cpp <- bias_mu_cpp <- bias_tau_cpp <- bias_pi_cpp <- cov_mu_cpp <- cov_tau_cpp <- cov_pi_cpp <- NA
+    valid_cpp <- integer(0)
+  }
+
+  out <- data.frame(
+    rownum = summarydata$rownum[rownum],
+    true_tau2 = df$tau2[1],
+    true_pi = true_pi,
+
+    bic_mc = bic_mc,
+    icl_mc = icl_mc,
+    pmc_mc = pmc_mc,
+    bias_mu_mc = bias_mu_mc,
+    bias_tau_mc = bias_tau_mc,
+    bias_pi_mc = bias_pi_mc,
+    cov_mu_mc = cov_mu_mc,
+    cov_tau_mc = cov_tau_mc,
+    cov_pi_mc = cov_pi_mc,
+
+    valid_mx = length(valid_mx),
+    m2ll_mx = m2ll_mx,
+    aic_mx = aic_mx,
+    bic_mx = bic_mx,
+    icl_mx = icl_mx,
+    pmc_mx = pmc_mx,
+    time_mx = time_mx,
+    bias_mu_mx = bias_mu_mx,
+    bias_tau_mx = bias_tau_mx,
+    bias_pi_mx = bias_pi_mx,
+    cov_mu_mx = cov_mu_mx,
+    cov_tau_mx = cov_tau_mx,
+    cov_pi_mx = cov_pi_mx,
+
+    valid_cpp = length(valid_cpp),
+    m2ll_cpp = m2ll_cpp,
+    aic_cpp = aic_cpp,
+    bic_cpp = bic_cpp,
+    icl_cpp = icl_cpp,
+    pmc_cpp = pmc_cpp,
+    time_cpp = time_cpp,
+    bias_mu_cpp = bias_mu_cpp,
+    bias_tau_cpp = bias_tau_cpp,
+    bias_pi_cpp = bias_pi_cpp,
+    cov_mu_cpp = cov_mu_cpp,
+    cov_tau_cpp = cov_tau_cpp,
+    cov_pi_cpp = cov_pi_cpp
+  )
+  saveRDS(out, file = paste0("paper/results/out_", rownum, ".rds"), compress = FALSE)
+  #write.table(x = t(out), file = sprintf("paper/results/out_%d.txt" , Sys.getpid()), sep = "\t", append = TRUE, row.names = FALSE, col.names = FALSE)
 }
 write(as.character(Sys.time()), file = "paper/results/time.log", append = TRUE)
 #Close cluster
@@ -100,57 +437,35 @@ stopCluster(cl)
 rm(cl)
 ## stop("End of simulation")
 
-save.image(paste0("tab", Sys.Date(), ".RData"))
-
+#save.image(paste0("tab", Sys.Date(), ".RData"))
 
 # Read files --------------------------------------------------------------
 library(data.table)
 
-res <- as.data.table(readRDS(list.files(pattern = "summarydata")))
+res <- as.data.table(readRDS(list.files(path = "paper", pattern = "summarydata", full.names = TRUE)))
 res[, seed := NULL]
-res[, reps := NULL]
-design_factors <- names(res)[!names(res) %in% c("rownum", "reps")]
-res[, (design_factors) := lapply(design_factors, function(thisvar){
-  ordered(res[[thisvar]], levels = hyper_parameters[[thisvar]])
-})]
 
-max_class <- 6
-reps <- 2
+design_factors <- names(res)[!names(res) %in% c("rownum", "reps")]
+# res[, (design_factors) := lapply(design_factors, function(thisvar){
+#   ordered(res[[thisvar]], levels = hyper_parameters[[thisvar]])
+# })]
+
 
 # Rename
-vars <- c("rownum", "rep",
-          paste0("M_", paste0(c("mm", "srmr"), "_", rep(1:max_class, each = reps))), # rowMeans(rep_stat)
-          paste0("SD_", paste0(c("mm", "srmr"), "_", rep(1:max_class, each = reps))), # apply(rep_stat, 1, sd)
-          paste0(rep(c("lb", "ub"), 6), "_", paste0(rep(c("mm", "srmr"), each = reps), "_", rep(1:max_class, each = 4))), # as.vector(apply(rep_stat, 1, quantile, probs = c(.025, .975)))
-          paste0("srmr_.1_", 1:max_class), # rowMeans(rep_stat[seq(from = 2, to = nrow(rep_stat), by = 2), ] < .1)
-          paste0("mm_min_dat_", 1:max_class), # rowMeans(rep_stat[seq(from = 1, to = nrow(rep_stat), by = 2), ] - mr_dat)
-          paste0("mm_greater_dat_", 1:max_class), # rowMeans(rep_stat[seq(from = 1, to = nrow(rep_stat), by = 2), ] > mr_dat)
-          paste0("dif_srmr_", 1:(max_class-1), "_", 2:max_class), # rowMeans(dif_sr)
-          paste0("dif_srmr_", rep(c("lb", "ub"), 2), "_", paste0(rep(1:(max_class-1), each = reps), "_", rep(2:max_class, each = reps))), # as.vector(apply(dif_sr, 1, quantile, probs = c(.025, .975)))
-          paste0("dif_srmr_neg_", 1:(max_class-1), "_", 2:max_class), # rowMeans(dif_sr < 0)
-          paste0("dif_mm_", 1:(max_class-1), "_", 2:max_class), # rowMeans(dif_mr)
-          paste0("dif_mm_", rep(c("lb", "ub"), 2), "_", paste0(rep(1:(max_class-1), each = reps), "_", rep(2:max_class, each = reps))), # as.vector(apply(dif_mr, 1, quantile, probs = c(.025, .975)))
-          paste0("dif_mm_neg_", 1:(max_class-1), "_", 2:max_class),# rowMeans(dif_mr < 0)
-          paste0("blrt_pv_", 1:(max_class-1), "_", 2:max_class), #blrt$p.value,
-          paste0("AICS_", 1:max_class), #IC$aics,
-          paste0("BICS_", 1:max_class), #IC$bics,
-          #"AIC_min", #which.min(IC$aics),
-          #"BIC_min", #which.min(IC$bics),
-          paste0("AIC_DCI_", 1:(max_class-1), "_", 2:max_class),#ic_ci[,"AIC_0"],
-          paste0("BIC_DCI_", 1:(max_class-1), "_", 2:max_class)#ic_ci[,"BIC_0"]
-          )
 
-#f <- list.files("results", full.names = TRUE)
+f <- list.files("paper/results", pattern = "\\.rds", full.names = TRUE)
+tab <- lapply(f, readRDS)
+#names(tab) <- basename(f)
 #tab <- lapply(f, fread, header = F)
-#tab <- rbindlist(tab)
-#setorderv(tab, cols = c("V1"), order=1L, na.last=FALSE)
-#if(!(tab$V1[1] == 1 & tail(tab$V1, 1) == nrow(res) & length(unique(tab$V1)) == nrow(res))){
-#  c(1:nrow(res))[!c(1:nrow(res)) %in% unique(tab$V1)]
-#  stop()
-#}
-colnames(tab) <- vars
-#tab[, "rownum" := NULL]
-merged <- merge(res, tab, by = "rownum")
+tab <- as.data.table(do.call(rbind, tab))
+#tab <- rbindlist(tab, fill = TRUE)
+setorderv(tab, cols = c("rownum"), order=1L, na.last=FALSE)
+if(!(tab$rownum[1] == 1 & tail(tab$rownum, 1) == nrow(res) & length(unique(tab$rownum)) == nrow(res))){
+  c(1:nrow(res))[!c(1:nrow(res)) %in% unique(tab$rownum)]
+  stop()
+}
+#merged <- merge(res, tab, by = "rownum", all.x = TRUE)
+merged <- cbind(res, tab)
 
 fwrite(merged, paste0("sim_results_", Sys.Date(), ".csv"))
 saveRDS(merged, paste0("sim_results_", Sys.Date(), ".RData"))

@@ -53,5 +53,4 @@ dat <- sim_mix_rma(n = 200, classes = 2,
                    p_ratio = 2,
                    means = c(0, 3),
                    tau2 = c(0.5, 2))
-
 }

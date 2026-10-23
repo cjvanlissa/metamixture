@@ -10,16 +10,22 @@ export(table_fit)
 export(table_results)
 importFrom(Rcpp,evalCpp)
 importFrom(methods,hasArg)
-importFrom(stats,approx)
-importFrom(stats,cutree)
-importFrom(stats,density)
-importFrom(stats,dist)
-importFrom(stats,dnorm)
-importFrom(stats,hclust)
-importFrom(stats,kmeans)
-importFrom(stats,rnorm)
-importFrom(stats,runif)
-importFrom(tidySEM,table_fit)
-importFrom(tidySEM,table_results)
+importFrom(stats,
+  approx,
+  cutree,
+  density,
+  dist,
+  dnorm,
+  hclust,
+  kmeans,
+  median,
+  rnorm,
+  runif,
+  var
+)
+importFrom(tidySEM,
+  table_fit,
+  table_results
+)
 importFrom(utils,getFromNamespace)
 useDynLib(metamixture, .registration = TRUE)

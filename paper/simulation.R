@@ -29,7 +29,7 @@ lapply(packagenames, library, character.only = TRUE)
 
 # Factorial design
 hyper_parameters <- list(
-  reps = 1,
+  reps = 1:100,
   k = c(20, 50, 100, 300),
   classes = c(2L:3L),
   vi = c(.001, .01, .1),
@@ -37,7 +37,7 @@ hyper_parameters <- list(
   p_ratio = c(1, 1.5))
 summarydata <- expand.grid(hyper_parameters, stringsAsFactors = FALSE)
 hyper_parameters <- list(
-  reps = 1,
+  reps = 1:100,
   k = c(20, 50, 100, 300),
   classes = 1L,
   vi = c(.001, .01, .1),
@@ -109,68 +109,68 @@ foreach(rownum = 1:nrow(summarydata), .packages = c("mclust", "metamixture", "Op
   true_pi <- summarydata$p_ratio[rownum] / (summarydata$p_ratio[rownum] + true_k - 1L)
 
   # Mclust
-  mc_try <- try({
-
-    res_mc <- lapply(
-      seq_len(max_classes),
-      mclust::Mclust,
-      data = df$yi,
-      modelNames = "E"
-    )
-
-    # Mclust BIC is reverse-coded
-    bic_mc <- which.max(sapply(res_mc, `[[`, "bic"))
-    icl_mc <- which.min(sapply(res_mc, metamixture:::icl_mclust))
-
-    pmcs <- metamixture:::pmc_mc(res_mc)
-    pmc_mc <- sum(cumprod(
-      rowSums(sign(pmcs[seq_len(max_classes - 1L),
-                        c("lb", "ub"), drop = FALSE])) == -2
-    )) + 1L
-
-    min_mu_mc <- which.min(res_mc[[true_k]]$parameters$mean)
-
-    bias_mu_mc <- res_mc[[true_k]]$parameters$mean[min_mu_mc]
-    bias_tau_mc <- (res_mc[[true_k]]$parameters$variance$sigmasq - df$tau2[1])
-    bias_pi_mc <- (res_mc[[true_k]]$parameters$pro[min_mu_mc] - true_pi)
-
-    # Bootstrap separately: failure does not invalidate other results
-    ses <- try(
-      mclust::MclustBootstrap(
-        res_mc[[true_k]],
-        nboot = 100,
-        type = "bs"
-      ),
-      silent = TRUE
-    )
-
-    if (!inherits(ses, "try-error")) {
-
-      ses_summary <- summary(ses, what = "se")
-
-      cov_mu_mc <- res_mc[[true_k]]$parameters$mean[min_mu_mc] +
-        c(-1.96, 1.96) * ses_summary$mean[min_mu_mc]
-      cov_mu_mc <- sum(sign(cov_mu_mc)) == 0
-
-      cov_tau_mc <- res_mc[[true_k]]$parameters$variance$sigmasq +
-        c(-1.96, 1.96) * drop(ses_summary$variance)[1]
-      cov_tau_mc <- sum(sign(cov_tau_mc - df$tau2[1])) == 0
-
-      cov_pi_mc <- sum(sign(
-        quantile(ses$pro[, min_mu_mc], c(.025, .975), na.rm = TRUE) - true_pi
-      )) == 0
-      if(true_k == 1L) bias_pi_mc <- cov_pi_mc <- NA
-
-    } else {
-      cov_mu_mc <- cov_tau_mc <- cov_pi_mc <- NA
-    }
-  }, silent = TRUE)
-
-  if (inherits(mc_try, "try-error")) {
-    bic_mc <- icl_mc <- pmc_mc <- NA_real_
-    cov_mu_mc <- cov_tau_mc <- cov_pi_mc <- NA
-    bias_mu_mc <- bias_tau_mc <- bias_pi_mc <- NA
-  }
+  # mc_try <- try({
+  #
+  #   res_mc <- lapply(
+  #     seq_len(max_classes),
+  #     mclust::Mclust,
+  #     data = df$yi,
+  #     modelNames = "E"
+  #   )
+  #
+  #   # Mclust BIC is reverse-coded
+  #   bic_mc <- which.max(sapply(res_mc, `[[`, "bic"))
+  #   icl_mc <- which.min(sapply(res_mc, metamixture:::icl_mclust))
+  #
+  #   pmcs <- metamixture:::pmc_mc(res_mc)
+  #   pmc_mc <- sum(cumprod(
+  #     rowSums(sign(pmcs[seq_len(max_classes - 1L),
+  #                       c("lb", "ub"), drop = FALSE])) == -2
+  #   )) + 1L
+  #
+  #   min_mu_mc <- which.min(res_mc[[true_k]]$parameters$mean)
+  #
+  #   bias_mu_mc <- res_mc[[true_k]]$parameters$mean[min_mu_mc]
+  #   bias_tau_mc <- (res_mc[[true_k]]$parameters$variance$sigmasq - df$tau2[1])
+  #   bias_pi_mc <- (res_mc[[true_k]]$parameters$pro[min_mu_mc] - true_pi)
+  #
+  #   # Bootstrap separately: failure does not invalidate other results
+  #   ses <- try(
+  #     mclust::MclustBootstrap(
+  #       res_mc[[true_k]],
+  #       nboot = 100,
+  #       type = "bs"
+  #     ),
+  #     silent = TRUE
+  #   )
+  #
+  #   if (!inherits(ses, "try-error")) {
+  #
+  #     ses_summary <- summary(ses, what = "se")
+  #
+  #     cov_mu_mc <- res_mc[[true_k]]$parameters$mean[min_mu_mc] +
+  #       c(-1.96, 1.96) * ses_summary$mean[min_mu_mc]
+  #     cov_mu_mc <- sum(sign(cov_mu_mc)) == 0
+  #
+  #     cov_tau_mc <- res_mc[[true_k]]$parameters$variance$sigmasq +
+  #       c(-1.96, 1.96) * drop(ses_summary$variance)[1]
+  #     cov_tau_mc <- sum(sign(cov_tau_mc - df$tau2[1])) == 0
+  #
+  #     cov_pi_mc <- sum(sign(
+  #       quantile(ses$pro[, min_mu_mc], c(.025, .975), na.rm = TRUE) - true_pi
+  #     )) == 0
+  #     if(true_k == 1L) bias_pi_mc <- cov_pi_mc <- NA
+  #
+  #   } else {
+  #     cov_mu_mc <- cov_tau_mc <- cov_pi_mc <- NA
+  #   }
+  # }, silent = TRUE)
+  #
+  # if (inherits(mc_try, "try-error")) {
+  #   bic_mc <- icl_mc <- pmc_mc <- NA_real_
+  #   cov_mu_mc <- cov_tau_mc <- cov_pi_mc <- NA
+  #   bias_mu_mc <- bias_tau_mc <- bias_pi_mc <- NA
+  # }
 
 
   # OPENMX
@@ -193,20 +193,20 @@ foreach(rownum = 1:nrow(summarydata), .packages = c("mclust", "metamixture", "Op
       res_mx,
       function(x) metamixture:::mx_convergence(x)$checks_pass
     )
-    if(any(!conv_mx)){
-      tstart <- Sys.time()
-      res_mx[which(!conv_mx)] <- lapply(
-        which(!conv_mx), function(i){
-          metamixture:::random_starts(res_mx[[i]])
-        })
-      time_mx <- time_mx + as.numeric(
-        difftime(Sys.time(), tstart, units = "secs")
-      )
-      conv_mx <- sapply(
-        res_mx,
-        function(x) metamixture:::mx_convergence(x)$checks_pass
-      )
-    }
+    # if(any(!conv_mx)){
+    #   tstart <- Sys.time()
+    #   res_mx[which(!conv_mx)] <- lapply(
+    #     which(!conv_mx), function(i){
+    #       metamixture:::random_starts(res_mx[[i]])
+    #     })
+    #   time_mx <- time_mx + as.numeric(
+    #     difftime(Sys.time(), tstart, units = "secs")
+    #   )
+    #   conv_mx <- sapply(
+    #     res_mx,
+    #     function(x) metamixture:::mx_convergence(x)$checks_pass
+    #   )
+    # }
 
     valid_mx <- seq_len(sum(cumprod(conv_mx)))
 
@@ -249,11 +249,10 @@ foreach(rownum = 1:nrow(summarydata), .packages = c("mclust", "metamixture", "Op
     # Parameter estimates and coverage for the true model
     if (true_k %in% valid_mx) {
       m2ll_mx <- res_mx[[true_k]]@output$Minus2LogLikelihood
-      min_mu_mx <- which.min(
-        sapply(seq_len(true_k), function(i) {
-          res_mx[[true_k]][[paste0("Mu", i)]]$values[1, 1]
-        })
-      )
+      mus <- sapply(seq_len(true_k), function(i) {
+        res_mx[[true_k]][[paste0("Mu", i)]]$values[1, 1]
+      })
+      min_mu_mx <- which.min(mus)
 
       cov_mu_mx <- res_mx[[true_k]][[paste0("Mu", min_mu_mx)]]$values[1, 1] +
         c(-1.96, 1.96) *
@@ -271,7 +270,7 @@ foreach(rownum = 1:nrow(summarydata), .packages = c("mclust", "metamixture", "Op
         cov_pi_mx <- sum(sign(
           res_mx_pi +
             c(-1.96, 1.96) *
-            OpenMx::mxSE("weights", res_mx[[true_k]])[1, min_mu_mx] -
+            OpenMx::mxSE("weights", res_mx[[true_k]], silent = TRUE)[1, min_mu_mx] -
             true_pi
         )) == 0
         bias_pi_mx <- (res_mx_pi - true_pi)
@@ -299,106 +298,104 @@ foreach(rownum = 1:nrow(summarydata), .packages = c("mclust", "metamixture", "Op
 
 
   # C++
-  cpp_try <- try({
-    tstart <- Sys.time()
-    res_cpp <- lapply(
-      seq_len(max_classes),
-      metamixture:::remix_cpp,
-      yi = df$yi,
-      vi = df$vi,
-      tau2 = "equal"
-    )
-    time_cpp <- as.numeric(
-      difftime(Sys.time(), tstart, units = "secs")
-    )
+  # cpp_try <- try({
+  #   tstart <- Sys.time()
+  #   res_cpp <- lapply(
+  #     seq_len(max_classes),
+  #     metamixture:::remix_cpp,
+  #     yi = df$yi,
+  #     vi = df$vi,
+  #     tau2 = "equal"
+  #   )
+  #   time_cpp <- as.numeric(
+  #     difftime(Sys.time(), tstart, units = "secs")
+  #   )
+  #
+  #   conv_cpp <- sapply(
+  #     res_cpp,
+  #     function(x) metamixture:::check_convergence_cpp(x)$checks_pass
+  #   )
+  #
+  #   valid_cpp <- seq_len(sum(cumprod(conv_cpp)))
+  #
+  #   if (length(valid_cpp) > 0L) {
+  #
+  #     aic_cpp <- which.min(
+  #       sapply(res_cpp[valid_cpp], `[[`, "AIC")
+  #     )
+  #
+  #     bic_cpp <- which.min(
+  #       sapply(res_cpp[valid_cpp], `[[`, "BIC")
+  #     )
+  #
+  #     icl_cpp <- which.min(
+  #       sapply(res_cpp[valid_cpp], metamixture:::icl_cpp)
+  #     )
+  #
+  #     if (length(valid_cpp) > 1L) {
+  #       pmcs <- metamixture:::pmc_cpp(res_cpp[valid_cpp])
+  #       pmcs <- pmcs[1L:(length(valid_cpp)-1L), , drop = FALSE]
+  #       pmc_cpp <- sum(cumprod(
+  #         rowSums(sign(pmcs[, c("lb", "ub"), drop = FALSE])) == -2
+  #       )) + 1L
+  #     } else {
+  #       pmc_cpp <- 1L
+  #     }
+  #   } else {
+  #     aic_cpp <- bic_cpp <- icl_cpp <- pmc_cpp <- NA
+  #   }
+  #
+  #   # Parameter coverage for the true model
+  #   if (true_k %in% valid_cpp) {
+  #     m2ll_cpp <- (-2*res_cpp[[true_k]]$logLik)
+  #     cov_mu_cpp <- res_cpp[[true_k]]$mu[1L] +
+  #       c(-1.96, 1.96) * res_cpp[[true_k]]$se_mu[1L]
+  #
+  #     cov_mu_cpp <- sum(sign(cov_mu_cpp)) == 0
+  #
+  #     cov_tau_cpp <- res_cpp[[true_k]]$tau2[1] +
+  #       c(-1.96, 1.96) * res_cpp[[true_k]]$se_tau2[1]
+  #
+  #     cov_tau_cpp <- sum(sign(cov_tau_cpp - df$tau2[1])) == 0
+  #
+  #     cov_pi_cpp <- res_cpp[[true_k]]$pi[1] +
+  #       c(-1.96, 1.96) * res_cpp[[true_k]]$se_pi[1]
+  #
+  #     cov_pi_cpp <- sum(sign(cov_pi_cpp - true_pi)) == 0
+  #
+  #     bias_mu_cpp <- res_cpp[[true_k]]$mu[1L]
+  #     bias_tau_cpp <- (res_cpp[[true_k]]$tau2[1] - df$tau2[1])
+  #     bias_pi_cpp <- (res_cpp[[true_k]]$pi[1] - true_pi)
+  #     if(true_k == 1L) bias_pi_cpp <- cov_pi_cpp <- NA
+  #
+  #   } else{
+  #     m2ll_cpp <- bias_mu_cpp <- bias_tau_cpp <- bias_pi_cpp <- cov_mu_cpp <- cov_tau_cpp <- cov_pi_cpp <- NA
+  #   }
+  #
+  # }, silent = TRUE)
+  #
 
-    conv_cpp <- sapply(
-      res_cpp,
-      function(x) metamixture:::check_convergence_cpp(x)$checks_pass
-    )
-
-    valid_cpp <- seq_len(sum(cumprod(conv_cpp)))
-
-    if (length(valid_cpp) > 0L) {
-
-      aic_cpp <- which.min(
-        sapply(res_cpp[valid_cpp], `[[`, "AIC")
-      )
-
-      bic_cpp <- which.min(
-        sapply(res_cpp[valid_cpp], `[[`, "BIC")
-      )
-
-      icl_cpp <- which.min(
-        sapply(res_cpp[valid_cpp], metamixture:::icl_cpp)
-      )
-
-      if (length(valid_cpp) > 1L) {
-        pmcs <- metamixture:::pmc_cpp(res_cpp[valid_cpp])
-        pmcs <- pmcs[1L:(length(valid_cpp)-1L), , drop = FALSE]
-        pmc_cpp <- sum(cumprod(
-          rowSums(sign(pmcs[, c("lb", "ub"), drop = FALSE])) == -2
-        )) + 1L
-      } else {
-        pmc_cpp <- 1L
-      }
-    } else {
-      aic_cpp <- bic_cpp <- icl_cpp <- pmc_cpp <- NA
-    }
-
-    # Parameter coverage for the true model
-    if (true_k %in% valid_cpp) {
-      m2ll_cpp <- (-2*res_cpp[[true_k]]$logLik)
-
-      cov_mu_cpp <- res_cpp[[true_k]]$mu[1L] +
-        c(-1.96, 1.96) * res_cpp[[true_k]]$se_mu[1L]
-
-      cov_mu_cpp <- sum(sign(cov_mu_cpp)) == 0
-
-      cov_tau_cpp <- res_cpp[[true_k]]$tau2[1] +
-        c(-1.96, 1.96) * res_cpp[[true_k]]$se_tau2[1]
-
-      cov_tau_cpp <- sum(sign(cov_tau_cpp - df$tau2[1])) == 0
-
-      cov_pi_cpp <- res_cpp[[true_k]]$pi[1] +
-        c(-1.96, 1.96) * res_cpp[[true_k]]$se_pi[1]
-
-      cov_pi_cpp <- sum(sign(cov_pi_cpp - true_pi)) == 0
-
-      bias_mu_cpp <- res_cpp[[true_k]]$mu[1L]
-      bias_tau_cpp <- (res_cpp[[true_k]]$tau2[1] - df$tau2[1])
-      bias_pi_cpp <- (res_cpp[[true_k]]$pi[1] - true_pi)
-      if(true_k == 1L) bias_pi_cpp <- cov_pi_cpp <- NA
-
-    } else{
-      m2ll_cpp <- bias_mu_cpp <- bias_tau_cpp <- bias_pi_cpp <- cov_mu_cpp <- cov_tau_cpp <- cov_pi_cpp <- NA
-    }
-
-  }, silent = TRUE)
-
-
-
-  if (inherits(cpp_try, "try-error")) {
-    time_cpp <- NA
-    aic_cpp <- bic_cpp <- icl_cpp <- pmc_cpp <- NA_real_
-    m2ll_cpp <- bias_mu_cpp <- bias_tau_cpp <- bias_pi_cpp <- cov_mu_cpp <- cov_tau_cpp <- cov_pi_cpp <- NA
-    valid_cpp <- integer(0)
-  }
+  # if (inherits(cpp_try, "try-error")) {
+  #   time_cpp <- NA
+  #   aic_cpp <- bic_cpp <- icl_cpp <- pmc_cpp <- NA_real_
+  #   m2ll_cpp <- bias_mu_cpp <- bias_tau_cpp <- bias_pi_cpp <- cov_mu_cpp <- cov_tau_cpp <- cov_pi_cpp <- NA
+  #   valid_cpp <- integer(0)
+  # }
 
   out <- data.frame(
     rownum = summarydata$rownum[rownum],
     true_tau2 = df$tau2[1],
     true_pi = true_pi,
 
-    bic_mc = bic_mc,
-    icl_mc = icl_mc,
-    pmc_mc = pmc_mc,
-    bias_mu_mc = bias_mu_mc,
-    bias_tau_mc = bias_tau_mc,
-    bias_pi_mc = bias_pi_mc,
-    cov_mu_mc = cov_mu_mc,
-    cov_tau_mc = cov_tau_mc,
-    cov_pi_mc = cov_pi_mc,
+    # bic_mc = bic_mc,
+    # icl_mc = icl_mc,
+    # pmc_mc = pmc_mc,
+    # bias_mu_mc = bias_mu_mc,
+    # bias_tau_mc = bias_tau_mc,
+    # bias_pi_mc = bias_pi_mc,
+    # cov_mu_mc = cov_mu_mc,
+    # cov_tau_mc = cov_tau_mc,
+    # cov_pi_mc = cov_pi_mc,
 
     valid_mx = length(valid_mx),
     m2ll_mx = m2ll_mx,
@@ -412,21 +409,21 @@ foreach(rownum = 1:nrow(summarydata), .packages = c("mclust", "metamixture", "Op
     bias_pi_mx = bias_pi_mx,
     cov_mu_mx = cov_mu_mx,
     cov_tau_mx = cov_tau_mx,
-    cov_pi_mx = cov_pi_mx,
+    cov_pi_mx = cov_pi_mx
 
-    valid_cpp = length(valid_cpp),
-    m2ll_cpp = m2ll_cpp,
-    aic_cpp = aic_cpp,
-    bic_cpp = bic_cpp,
-    icl_cpp = icl_cpp,
-    pmc_cpp = pmc_cpp,
-    time_cpp = time_cpp,
-    bias_mu_cpp = bias_mu_cpp,
-    bias_tau_cpp = bias_tau_cpp,
-    bias_pi_cpp = bias_pi_cpp,
-    cov_mu_cpp = cov_mu_cpp,
-    cov_tau_cpp = cov_tau_cpp,
-    cov_pi_cpp = cov_pi_cpp
+    # valid_cpp = length(valid_cpp),
+    # m2ll_cpp = m2ll_cpp,
+    # aic_cpp = aic_cpp,
+    # bic_cpp = bic_cpp,
+    # icl_cpp = icl_cpp,
+    # pmc_cpp = pmc_cpp,
+    # time_cpp = time_cpp,
+    # bias_mu_cpp = bias_mu_cpp,
+    # bias_tau_cpp = bias_tau_cpp,
+    # bias_pi_cpp = bias_pi_cpp,
+    # cov_mu_cpp = cov_mu_cpp,
+    # cov_tau_cpp = cov_tau_cpp,
+    # cov_pi_cpp = cov_pi_cpp
   )
   saveRDS(out, file = paste0("paper/results/out_", rownum, ".rds"), compress = FALSE)
   #write.table(x = t(out), file = sprintf("paper/results/out_%d.txt" , Sys.getpid()), sep = "\t", append = TRUE, row.names = FALSE, col.names = FALSE)
@@ -467,5 +464,25 @@ if(!(tab$rownum[1] == 1 & tail(tab$rownum, 1) == nrow(res) & length(unique(tab$r
 #merged <- merge(res, tab, by = "rownum", all.x = TRUE)
 merged <- cbind(res, tab)
 
-fwrite(merged, paste0("sim_results_", Sys.Date(), ".csv"))
 saveRDS(merged, paste0("sim_results_", Sys.Date(), ".RData"))
+
+
+class_performance <- function(classes, predicted) {
+  tab <- table(
+    factor(classes, levels = sort(unique(c(classes, predicted)))),
+    factor(predicted, levels = sort(unique(c(classes, predicted))))
+  )
+
+  tp <- diag(tab)
+  fn <- rowSums(tab) - tp
+  fp <- colSums(tab) - tp
+  tn <- sum(tab) - tp - fn - fp
+
+  c(
+    sensitivity = mean(tp / (tp + fn), na.rm = TRUE),
+    specificity = mean(tn / (tn + fp), na.rm = TRUE),
+    accuracy = sum(tp) / sum(tab)
+  )
+}
+
+class_performance(merged$classes, merged$pmc_mx)

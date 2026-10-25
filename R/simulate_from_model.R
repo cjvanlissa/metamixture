@@ -11,7 +11,7 @@ simulate_remix.MxModel <- function(x, add_vi = TRUE){
   C <- apply(cp, 1, sample, x = seq_len(classes), size = 1L, replace = FALSE)
   do.call(rbind, lapply(unique(C), function(i){
     n_c <- sum(C == i)
-    tau2 <- x@matrices[[paste0("Tau", i)]]$values[1,1]
+    tau2 <- diag(x@matrices$S$values)
     if(add_vi){
       vis <- sample(x$V$values, size = n_c, replace = TRUE, prob = cp[, i])
       tau2 <- tau2 + vis
@@ -20,7 +20,7 @@ simulate_remix.MxModel <- function(x, add_vi = TRUE){
     }
     data.frame(
       yi = rnorm(n_c,
-                 mean = x@matrices[[paste0("Mu", i)]]$values[1,1],
+                 mean = x@matrices$M$values[1,],
                  sd = sqrt(tau2)),
       vi = vis,
       C = i)

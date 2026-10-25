@@ -2,30 +2,12 @@
 
 S3method(simulate_remix,MxModel)
 S3method(simulate_remix,remix_cpp)
-S3method(table_fit,remix_cpp)
 export(remix)
-export(remix_se)
 export(sim_mix_rma)
 export(table_fit)
 export(table_results)
-importFrom(Rcpp,evalCpp)
-importFrom(methods,hasArg)
-importFrom(stats,
-  approx,
-  cutree,
-  density,
-  dist,
-  dnorm,
-  hclust,
-  kmeans,
-  median,
-  rnorm,
-  runif,
-  var
-)
-importFrom(tidySEM,
-  table_fit,
-  table_results
-)
+importFrom(stats,median)
+importFrom(stats,var)
+importFrom(tidySEM,table_fit)
+importFrom(tidySEM,table_results)
 importFrom(utils,getFromNamespace)
-useDynLib(metamixture, .registration = TRUE)

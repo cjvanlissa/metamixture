@@ -249,9 +249,7 @@ foreach(rownum = 1:nrow(summarydata), .packages = c("mclust", "metamixture", "Op
     # Parameter estimates and coverage for the true model
     if (true_k %in% valid_mx) {
       m2ll_mx <- res_mx[[true_k]]@output$Minus2LogLikelihood
-      mus <- sapply(seq_len(true_k), function(i) {
-        res_mx[[true_k]][[paste0("Mu", i)]]$values[1, 1]
-      })
+      mus <- res_mx[[true_k]]@matrices$M$values[1, ]
       min_mu_mx <- which.min(mus)
 
       cov_mu_mx <- res_mx[[true_k]][[paste0("Mu", min_mu_mx)]]$values[1, 1] +

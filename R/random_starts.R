@@ -70,10 +70,8 @@ random_starts_remix_internal <- function(x) {
   xrng[!is.finite(xrng) | xrng == 0] <- 1
   if(!is.finite(xtau2) | xtau2 == 0) xtau2 <- (xrng / 4)^2
   classes <- num_classes(x)
-  for(i in seq_len(classes)){
-    x@matrices[[paste0("Tau", i)]]$values[1,1] <- runif(1, min = 0.5 * xtau2, max = 1.0 * xtau2)
-    x@matrices[[paste0("Mu", i)]]$values[1,1] <- runif(n = 1, min = xmin, max = xmax)
-  }
+  diag(x@matrices$S$values) <- runif(n = length(diag(x@matrices$S$values)), min = 0.5 * xtau2, max = 1.0 * xtau2)
+  x@matrices$M$values[1,] <- runif(n = length(x@matrices$M$values[1,]), min = xmin, max = xmax)
   x@matrices$Eta$values[1, ] <- p_to_eta(p_from_parameters(x))
   x <- OpenMx::omxAssignFirstParameters(x)
   return(x)
@@ -84,13 +82,8 @@ p_from_parameters <- function(x){
   yi <- x$Y$values
   vi <- x$V$values
   classes <- num_classes(x)
-  mu <- vapply(seq_len(classes), function(k) {
-    as.numeric(x@matrices[[paste0("Mu", k)]]@values)
-  }, numeric(1))
-
-  tau2 <- vapply(seq_len(classes), function(k) {
-    as.numeric(x@matrices[[paste0("Tau", k)]]@values)
-  }, numeric(1))
+  mu <- x@matrices$M$values[1,]
+  tau2 <- diag(x@matrices$S$values)
 
   # Log of weighted component densities
   logdens <- sapply(seq_len(classes), function(k){

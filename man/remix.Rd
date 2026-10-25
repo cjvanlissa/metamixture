@@ -10,9 +10,7 @@ remix(
   classes = 2L,
   mu = c("varying", "equal"),
   tau2 = c("varying", "equal"),
-  method = c("cpp", "OpenMx"),
-  run = TRUE,
-  options = list()
+  run = TRUE
 )
 }
 \arguments{
@@ -28,14 +26,10 @@ classes to fit. Defaults to \code{1L:2L}.}
 \item{tau2}{Whether component heterogeneity variances are \code{varying} or
 \code{equal}.}
 
-\item{method}{Estimation method: \code{"cpp"} or \code{"OpenMx"}.}
-
 \item{run}{Logical. If \code{TRUE} (the default), the model is
 estimated using OpenMx. If \code{FALSE}, the unestimated
 OpenMx model object is returned, allowing further modification
-before estimation. Ignored for C++.}
-
-\item{options}{Named list of arguments passed to \code{remix_cpp()}.}
+before estimation.}
 }
 \value{
 A fitted model object, or a \code{"mixture_list"} when multiple class
@@ -66,8 +60,8 @@ df <- sim_mix_rma2(n = 200, classes = 2, p_ratio = 1, r2 = 1)
 res1 <- remix(df$yi, df$vi, classes = 1)
 if(requireNamespace("metafor")){
   res_mf <- metafor::rma(yi = df$yi, vi = df$vi)
-  res_mf$b[1,1] - res1$Mu1$values[1,1]
-  res_mf$tau2 - res1$Tau1$values[1,1]
+  res_mf$b[1,1] - res1$M$values[1, 1]
+  res_mf$tau2 - res1$S$values[1, 1]
 }
 
 # Two-class random-effects mixture model

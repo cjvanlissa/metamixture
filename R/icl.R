@@ -33,14 +33,12 @@ posterior_from_logdens <- function(logdens, weights) {
 
 icl_mclust <- function(fit) icl(fit$z, fit$loglik, fit$df, fit$n)
 
-icl_cpp <- function(fit) icl(fit$posterior, fit$logLik, fit$npar, fit$n)
-
 icl_mx <- function(model) {
   yi <- as.numeric(model$Y$values)
   vi <- as.numeric(model$V$values)
-  K  <- sum(grepl("^Mu[0-9]+$", names(model@matrices)))
-  mu   <- sapply(seq_len(K), function(k) model[[paste0("Mu", k)]]$values[1,1])
-  tau2   <- sapply(seq_len(K), function(k) model[[paste0("Tau", k)]]$values[1,1])
+  K <- sum(grepl("^Mu[0-9]+$", names(model@matrices)))
+  mu <- model@matrices$M$values[1,]
+  tau2 <- diag(model@matrices$S$values)
   w <- if (K == 1) 1 else as.numeric(OpenMx::mxEval(weights, model))
   logd <- sapply(seq_len(K), function(k) stats::dnorm(yi, mu[k], sqrt(vi + tau2[k]), log = TRUE))
   logd <- matrix(logd, ncol = K)

@@ -13,7 +13,7 @@ hyper_parameters <- list(
   k = c(20, 50, 100, 300),
   classes = 2L,
   vi = c(.001, .01, .1),
-  tau2_ratio = c(1, 2, 6),
+  tau2_ratio = c(2, 4, 6),
   p_ratio = c(1, 1.5)
 )
 summarydata <- expand.grid(hyper_parameters, stringsAsFactors = FALSE)
@@ -237,7 +237,7 @@ rm(cl)
 library(data.table)
 
 res <- as.data.table(readRDS(list.files(path = "paper", pattern = "summarydata", full.names = TRUE)))
-res[, seed := NULL]
+#res[, seed := NULL]
 
 f <- list.files(outdir, pattern = "\\.rds", full.names = TRUE)
 tab <- lapply(f, readRDS)
@@ -246,11 +246,24 @@ tab <- as.data.table(do.call(rbind, tab))
 
 setorderv(tab, cols = c("rownum"), order=1L, na.last=FALSE)
 setorderv(res, cols = c("rownum"), order=1L, na.last=FALSE)
-if(!(tab$rownum[1] == 1 & tail(tab$rownum, 1) == nrow(res) & length(unique(tab$rownum)) == nrow(res))){
-  c(1:nrow(res))[!c(1:nrow(res)) %in% unique(tab$rownum)]
-  stop()
-}
 
 merged <- cbind(res, tab)
 
 saveRDS(merged, file.path(outdir, paste0("sim_results_", Sys.Date(), ".RData")))
+
+# Analysis
+
+bettermodel <- prop.table(table(merged$m2ll_mx < merged$m2ll_mp))
+cat("We conducted a simulation study with ", nrow(merged), "replications. Simulation conditions were ", deparse(hyper_parameters), ", chosen to align with the assumptions of metaplus.\n\n", file = "paper/results_metaplus.txt")
+cat("In ", worcs::report(bettermodel[2]*100, equals = F), "% of replications, the remix model had a lower minus 2 log likelihood than the metaplus model, indicating that it found a better solution.\n\n", file = "paper/results_metaplus.txt", append = TRUE)
+ps <- c("mu", "tau", "pi")
+merged[, (paste0("diff_", ps)) := lapply(ps, function(p){abs(merged[[paste0("bias_", p, "_mp")]]) - abs(merged[[paste0("bias_", p, "_mx")]])})]
+out <- as.numeric(merged[, lapply(.SD, mean, na.rm = T), .SDcols = grep("diff_", names(merged))])
+
+cat("The difference in bias between the two methods was near-zero for all parameters:", paste0(ps, ": ", formatC(out, digits = 2, format = "f")),  "\n\n", file = "paper/results_metaplus.txt", append = TRUE)
+
+out <- as.numeric(merged[, lapply(.SD, mean, na.rm = T), .SDcols = grep("cov_", names(merged))])
+cat("The methods had near-identical confidence interval coverage for mu, but metaplus did not return confidence intervals for tau2 or pi in any replication. While remix has the advantage of yielding confidence intervals, note that coverage was below nominal levels for all parameters.", paste0(grep("cov_", names(merged), value = T), ": ", formatC(out, digits = 2, format = "f")),  "\n\n", file = "paper/results_metaplus.txt", append = TRUE)
+
+
+

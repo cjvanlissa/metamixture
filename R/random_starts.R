@@ -44,7 +44,7 @@ random_starts <- function(x,
     out[[i]] <- random_starts_remix_internal(x)
   }
   if(!run) return(out)
-  out <- lapply(out, OpenMx::mxRun, intervals = FALSE)
+  out <- lapply(out, OpenMx::mxRun, intervals = FALSE, silent = TRUE)
   tab_ll <- data.frame(seed = seq_along(seed_values), Minus2LogLikelihood = sapply(out, function(x){x$output$Minus2LogLikelihood}))
   if(sum(tab_ll$Minus2LogLikelihood - min(tab_ll$Minus2LogLikelihood) < tolerance_minus2ll) < 2){
     warning("The smallest Minus2LogLikelihood was not replicated.")

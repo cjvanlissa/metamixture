@@ -1,12 +1,13 @@
 library(data.table)
 library(ggplot2)
 
-input <- 'sim_results_2026-10-23.RData'
+input <- 'paper/results/sim_results_2026-10-28.RData'
 outdir <- 'paper/output'
-ignore <- c("reps", "rownum", "true_tau", "true_pi")
-factors <- c('k', 'classes', 'vi', 'r2', 'p_ratio')
-methods <- c('bic', 'icl', 'pmc')
+ignore <- c("reps", "rownum", "seed", "true_pi")
+factors <- c('k', 'classes', 'vi', 'es', 'p_ratio')
+enum <- c('aic', 'bic', 'icl', 'pmc', 'cv')
 pars <- c('mu', 'tau', 'pi')
+true_tau = 1
 
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 outfile <- file.path(outdir, "output.txt")
@@ -16,7 +17,8 @@ file.remove(f)
 dat <- as.data.table(readRDS(input))
 setnames(dat, make.unique(names(dat)))
 if ('rownum.1' %in% names(dat)) dat[, rownum.1 := NULL]
-dat[, (grep("_(mc|cpp)$", names(dat), value = TRUE)) := NULL]
+dat[, (ignore) := NULL]
+#dat[, (grep("_(mc|cpp)$", names(dat), value = TRUE)) := NULL]
 data.table::setnames(dat, grep("_mx$", names(dat), value = TRUE), gsub("_mx$", "", grep("_mx$", names(dat), value = TRUE)))
 # Check convergence
 conv_tab <- prop.table(table(dat$valid))
@@ -26,433 +28,264 @@ cat("In ", worcs::report(sum(dat$valid >= dat$classes)/nrow(dat), equals = F), "
 #
 # cat("In ", worcs::report(sum(dat$valid >= dat$classes)/nrow(dat), equals = F), " percent of replications, all models up to the true model converged.\n", worcs::report(sum(conv_tab[-length(conv_tab)]), equals = F), " percent of replications had one model or more that did not converge.\n", file = outfile)
 
-
-# Prepare for analysis
-set(dat, which(is.na(dat$r2)), "r2", 1.0)
-
 dat[, paste0("bias_abs_", pars) := lapply(.SD, abs), .SDcols = paste0("bias_", pars)]
-dat[, paste0("acc_", methods) := lapply(.SD, function(x) x == classes), .SDcols = methods]
-dat[, paste0("over_", methods) := lapply(.SD, function(x) x > classes), .SDcols = methods]
-dat[, paste0("under_", methods) := lapply(.SD, function(x) x < classes), .SDcols = methods]
+dat[, paste0("acc_", enum) := lapply(.SD, function(x) x == classes), .SDcols = enum]
+dat[, paste0("over_", enum) := lapply(.SD, function(x) x > classes), .SDcols = enum]
+dat[, paste0("under_", enum) := lapply(.SD, function(x) x < classes), .SDcols = enum]
 
 dat[, (factors) := lapply(.SD, function(v) ordered(v, levels = unique(v)[order(as.numeric(unique(v)))])), .SDcols = factors]
-levels(dat$r2) <- c("0.2", "0.6", "0.8", "1.0")
+#lapply(factors, function(v)levels(dat[[v]]))
 
 
 cols <- setdiff(names(dat), c(ignore, factors))
 
-summary_stats <- rbindlist(lapply(cols, function(col) {
-  x <- dat[[col]]
-  x_non_na <- x[!is.na(x)]
+sum_fun <- function(x, vnam){
+  x_obs <- x[!is.na(x)]
 
   data.table(
-    outcome = col,
-    pct_non_missing = 100 * length(x_non_na) / nrow(dat),
-    mean_val = mean(x_non_na),
-    sd_val = sd(x_non_na),
-    p2_5 = if (length(x_non_na)) quantile(x_non_na, 0.025) else NA_real_,
-    p97_5 = if (length(x_non_na)) quantile(x_non_na, 0.975) else NA_real_
+    outcome = vnam,
+    n = 100 * length(x_obs) / length(x),
+    mean = mean(x_obs),
+    median = median(x_obs),
+    sd = sd(x_obs),
+    p10 = quantile(x_obs, 0.10),
+    p90 = quantile(x_obs, 0.90)
   )
+}
+summary_stats <- rbindlist(lapply(cols, function(vnam) {
+  x <- dat[[vnam]]
+  sum_fun(x, vnam)
 }))
-
-
-cols <- c("true_tau2", "valid", "m2ll", "time",
-          "bias_mu", "bias_tau", "bias_pi", "cov_mu", "cov_tau", "cov_pi",
-          "bias_abs_mu", "bias_abs_tau", "bias_abs_pi", "acc_bic", "acc_icl",
-          "acc_pmc")
 
 
 sum_by_factor <- rbindlist(lapply(factors, function(fac) {
 
-  rbindlist(lapply(cols, function(col) {
-
+  rbindlist(lapply(cols, function(vnam) {
     result <- dat[, {
-      x <- get(col)
-      x_non_na <- x[!is.na(x)]
-
-      .(
-        complete = 100 * length(x_non_na) / .N,
-        mean = mean(x_non_na),
-        sd = sd(x_non_na),
-        p_10 = if (length(x_non_na))
-          as.numeric(quantile(x_non_na, 0.1)) else NA_real_,
-        p_90 = if (length(x_non_na))
-          as.numeric(quantile(x_non_na, 0.9)) else NA_real_
-      )
+      x <- as.numeric(get(vnam))
+      sum_fun(x, vnam)
     }, by = fac]
-
     setnames(result, fac, "level")
-    result[, `:=`(outcome = col, factor = fac)]
-
+    result[, "outcome" := vnam]
+    result[, "factor" := fac]
     result
-
   }), fill = TRUE)
-
 }), fill = TRUE)
 
-setcolorder(sum_by_factor, c(
-  "outcome", "factor", "level",
-  "complete", "mean",
-  "sd", "p_10", "p_90"
-))
 
-setorder(sum_by_factor, outcome, factor, level)
-
-fwrite(summary_stats, file.path(outdir, '01_overall_performance.csv'))
-fwrite(sum_by_factor, file.path(outdir, '02_per_condition.csv'))
+fwrite(summary_stats, file.path(outdir, 'performance_overall.csv'))
+fwrite(sum_by_factor, file.path(outdir, 'performance_by_condition.csv'))
 
 # Three plots: bias (signed + absolute), coverage, and enumeration
 # Prepare plotting data
 
-base_theme <- theme_bw() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    axis.title.x = element_blank(),
-    legend.position = "bottom"
+plot_theme <- function(data, filter, ribbons = FALSE, lines_by = NULL, panel = TRUE) {
+  p <- ggplot(
+    data,
+    aes(
+      x = level,
+      y = mean,
+      group = 1
+    )
   )
+  if(ribbons){
+    p <- p + geom_ribbon(aes(ymin = p10, ymax = p90), alpha = .4)
+  }
+  if(!is.null(lines_by)){
+    p <- p +
+      geom_line(aes(linetype = .data[[lines_by]], group = .data[[lines_by]]), na.rm = TRUE) +
+      geom_point(aes(shape = .data[[lines_by]], group = .data[[lines_by]]), na.rm = TRUE, size = 2)
+  } else {
+    p <- p +
+      geom_line(na.rm = TRUE) +
+      geom_point(na.rm = TRUE, size = 2)
+  }
+  if(panel){
+    p <- p +
+      facet_grid(
+        outcome ~ factor,
+        scales = "free",
+        space = "free_x"
+      ) +
+      ggh4x::facetted_pos_scales(
+        y = list(
 
+          # Proportions
+          outcome %in% c(
+            "cov_mu", "cov_tau", "cov_pi",
+            "acc_aic", "acc_bic", "acc_icl", "acc_pmc", "acc_cv",
+            "over_aic", "over_bic", "over_icl", "over_pmc", "over_cv",
+            "under_aic", "under_bic", "under_icl", "under_pmc", "under_cv"
+          ) ~ scale_y_continuous(
+            limits = c(0, 1),
+            breaks = seq(0, 1, by = 0.25)
+          ),
+
+          # Valid
+          outcome == "valid" ~ scale_y_continuous(
+            limits = c(0, 4),
+            breaks = 0:4
+          ),
+
+          # Bias: symmetric around zero
+          outcome %in% c(
+            "bias_mu", "bias_tau", "bias_pi"
+          ) ~ scale_y_continuous(
+            limits = function(lims) {
+              m <- max(abs(lims), na.rm = TRUE)
+              c(-m, m)
+            },
+            breaks = scales::breaks_pretty(n = 5)
+          ),
+
+          # Absolute bias
+          outcome %in% c(
+            "bias_abs_mu", "bias_abs_tau", "bias_abs_pi"
+          ) ~ scale_y_continuous(
+            limits = c(0, NA),
+            breaks = scales::breaks_pretty(n = 5)
+          ),
+
+          # Number of classes
+          outcome %in% c(
+            "aic", "bic", "icl", "pmc", "cv"
+          ) ~ scale_y_continuous(
+            limits = c(1, 4),
+            breaks = 1:4
+          ),
+
+          # Minus 2 log-likelihood
+          outcome == "m2ll" ~ scale_y_continuous(
+            breaks = scales::breaks_pretty(n = 5)
+          ),
+
+          # Runtime
+          outcome == "time" ~ scale_y_continuous(
+            limits = c(0, NA),
+            breaks = scales::breaks_pretty(n = 5)
+          )
+        )
+      )
+  }
+  p <- p +
+    theme_bw() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      legend.position = "bottom"
+    )
+
+  # ggsave(file.path(outdir, paste0("plot_", make.names(selection), ".pdf")),
+  #                  p, width = 15, height = 8)
+  return(p)
+}
+
+
+df_plot <- copy(sum_by_factor)
+df_plot <- df_plot[!level == "0", ]
+df_plot$level <- ordered(df_plot$level, levels = levels(df_plot$level)[order(as.numeric(levels(df_plot$level)), decreasing = F)])
+df_plot$level <- droplevels(df_plot$level)
 # 1. Bias and absolute bias
-# Reshape bias variables into long format
-bias_long <- melt(
-  dat,
-  id.vars = factors,
-  measure.vars = patterns(
-    bias = "^bias_(mu|tau|pi)$",
-    absolute_bias = "^bias_abs_(mu|tau|pi)$"
-  ),
-  variable.name = "parameter"
+#ordered_levels <- unique(unlist(factor_levels, use.names = FALSE))
+df_bias <- copy(df_plot[grep("bias_(mu|ta|pi)", outcome), ])
+df_bias[, outcome := ordered(outcome, levels = paste0("bias_", c("mu", "tau", "pi")))]
+my_labs <- c(
+  "k" = "K",
+  "classes" = "C",
+  "vi" = "v[i]",
+  "es" = "Delta[mu]",
+  "p_ratio" = "p[plain(ratio)]",
+  "bias_mu" = "mu",
+  "bias_tau" = "tau^2",
+  "bias_pi" = "pi"
 )
-
-bias_long[, parameter := factor(
-  parameter,
-  levels = 1:3,
-  labels = c("mu", "tau", "pi")
-)]
-
-# Reshape factors into long format
-plotdata <- melt(
-  bias_long,
-  id.vars = c("parameter", "bias", "absolute_bias"),
-  measure.vars = factors,
-  variable.name = "factor",
-  value.name = "level",
-  variable.factor = FALSE
+p <- plot_theme(df_bias, ribbons = T) + geom_hline(yintercept = 0, linetype = 2)
+p <- p + facet_grid(
+  outcome ~ factor,
+  scales = "free",
+  space = "free_x",
+  labeller = as_labeller(my_labs, default = label_parsed)
 )
+ggsave(file.path(outdir, paste0("plot_bias.pdf")), p, width = 29, height = 10, units = "cm")
 
-# Summarize across all other factors
-plotdata <- plotdata[
-  ,
-  .(
-    bias = mean(bias, na.rm = TRUE),
-    absolute_bias = mean(absolute_bias, na.rm = TRUE)
-  ),
-  by = .(factor, level, parameter)
-]
-
-# Combine bias and absolute bias into one column
-plotdata <- melt(
-  plotdata,
-  id.vars = c("factor", "level", "parameter"),
-  measure.vars = c("bias", "absolute_bias"),
-  variable.name = "statistic",
-  value.name = "value"
-)
-
-plotdata[, statistic := factor(
-  statistic,
-  levels = c("bias", "absolute_bias"),
-  labels = c("Bias", "Absolute bias")
-)]
-
-# Preserve the original order of factor levels
-factor_levels <- lapply(dat[, ..factors], levels)
-
-ordered_levels <- unique(unlist(factor_levels, use.names = FALSE))
-
-plotdata[, level := factor(
-  as.character(level),
-  levels = ordered_levels,
-  ordered = TRUE
-)]
-
-plotdata[, factor := factor(
-  factor,
-  levels = factors
-)]
-
-plotdata[, parameter := factor(
-  parameter,
-  levels = c("mu", "tau", "pi"),
-  labels = c("μ", "τ²", "π")
-)]
-
-g_bias <- ggplot(
-  plotdata,
-  aes(
-    x = level,
-    y = value,
-    color = statistic,
-    shape = statistic,
-    linetype = statistic,
-    group = interaction(parameter, statistic)
-  )
-) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 0.4) +
-  geom_line(na.rm = TRUE) +
-  geom_point(na.rm = TRUE, size = 2) +
-  scale_color_manual(
-    values = c(Bias = "grey30", "Absolute bias" = "grey80")) +
-  scale_shape_manual(
-    values = c(Bias = 16, "Absolute bias" = 17)) +
-  facet_grid(parameter ~ factor, scales = "free_x", space = "free_x") +
-  labs(x = NULL, y = "Mean bias",
-       color = "Metric", shape = "Metric", linetype = "Parameter") +
-  base_theme
-
-ggsave(file.path(outdir, "plot_bias.pdf"),
-       g_bias, width = 15, height = 8)
 
 
 # 2. Coverage
 # Coverage variables and simulation factors
-coverage_vars <- c("cov_mu", "cov_tau", "cov_pi")
-factors <- c("k", "classes", "vi", "r2", "p_ratio")
+df_cov <- copy(df_plot[grep("^cov_", outcome), ])
+df_cov[, outcome := ordered(outcome, levels = paste0("cov_", c("mu", "tau", "pi")))]
+names(my_labs) <- gsub("^bias", "cov", names(my_labs))
 
-# Preserve original factor levels and their ordering
-factor_levels <- lapply(dat[, ..factors], levels)
-
-# Reshape coverage variables
-coverage_long <- melt(
-  dat,
-  id.vars = factors,
-  measure.vars = coverage_vars,
-  variable.name = "outcome",
-  value.name = "coverage"
+p <- plot_theme(df_cov, ribbons = F) + geom_hline(yintercept = .95, linetype = 2)
+p <- p + facet_grid(
+  outcome ~ factor,
+  scales = "free",
+  space = "free_x",
+  labeller = as_labeller(my_labs, default = label_parsed)
 )
+ggsave(file.path(outdir, paste0("plot_cov.pdf")), p, width = 29, height = 10, units = "cm")
 
-coverage_long[, outcome := factor(
-  outcome,
-  levels = coverage_vars,
-  labels = c("μ", "τ²", "π")
-)]
-
-# Reshape simulation factors
-d <- melt(
-  coverage_long,
-  id.vars = c("outcome", "coverage"),
-  measure.vars = factors,
-  variable.name = "condition",
-  value.name = "level",
-  variable.factor = FALSE
-)
-
-# Calculate coverage probability, averaging over other factors
-d <- d[
-  ,
-  .(
-    value = if (all(is.na(coverage))) NA_real_
-    else mean(coverage, na.rm = TRUE)
-  ),
-  by = .(outcome, condition, level)
-]
-
-# Preserve original factor orders independently
-d[, factor_level := paste(condition, as.character(level), sep = "__")]
-
-x_levels <- unlist(
-  Map(
-    function(f, lev) paste(f, lev, sep = "__"),
-    names(factor_levels),
-    factor_levels
-  ),
-  use.names = FALSE
-)
-
-d[, factor_level := factor(factor_level, levels = x_levels)]
-d[, condition := factor(condition, levels = factors)]
-
-# Plot
-g_coverage <- ggplot(
-  d,
-  aes(
-    x = factor_level,
-    y = value,
-    group = outcome,
-    linetype = outcome,
-    shape = outcome
-  )
-) +
-  geom_hline(
-    yintercept = 0.95,
-    linetype = "dashed",
-    color = "grey40"
+p <- plot_theme(df_cov, ribbons = F, lines_by = "outcome", panel = F) +
+  geom_hline(yintercept = .95, linetype = 2) +
+  scale_linetype_discrete(
+    name = "Parameter",
+    labels = function(x) parse(text = unname(my_labs[x]))
   ) +
-  geom_line(color = "grey30", na.rm = TRUE) +
-  geom_point(color = "grey30", na.rm = TRUE, size = 2) +
+  scale_shape_discrete(
+    name = "Parameter",
+    labels = function(x) parse(text = unname(my_labs[x]))
+  )+
   facet_grid(
-    ~ condition,
-    scales = "free_x",
-    space = "free_x"
-  ) +
-  scale_x_discrete(
-    labels = function(x) sub("^.*?__", "", x)
-  ) +
-  coord_cartesian(ylim = c(0, 1)) +
-  labs(
-    x = NULL,
-    y = "Coverage probability",
-    linetype = "Parameter",
-    shape = "Parameter"
-  ) +
-  base_theme
+  ~ factor,
+  scales = "free",
+  space = "free_x",
+  labeller = as_labeller(my_labs, default = label_parsed))
 
-ggsave(file.path(outdir, "plot_coverage.pdf"),
-       g_coverage, width = 15, height = 8)
+ggsave(file.path(outdir, paste0("plot_cov2.pdf")), p, width = 29, height = 10, units = "cm")
+
+
+
 
 # 3. Class enumeration
-library(data.table)
 
-factors <- c("k", "classes", "vi", "r2", "p_ratio")
+df_enum <- copy(df_plot[grep("^(acc|under|over)", outcome), ])
+df_enum[, algorithm := ordered(gsub(".+?_", "", outcome), levels = c("aic", "bic", "icl", "pmc", "cv"), labels = c("AIC", "BIC", "ICL", "PMC", "CV"))]
+df_enum[, outcome := gsub("_.*$", "", outcome)]
+my_labs <- levels(df_enum$algorithm)
+names(my_labs) <- my_labs
+my_labs <- c(my_labs, c("acc" = "Accurate", "over" = "Overfit", "under" = "Underfit",
+                        "k" = "K",
+                        "classes" = "C",
+                        "vi" = "v[i]",
+                        "es" = "Delta[mu]",
+                        "p_ratio" = "p[plain(ratio)]"))
 
-# Preserve original factor levels
-factor_levels <- lapply(dat[, ..factors], levels)
-
-# Reshape enumeration outcomes
-enum_long <- melt(
-  dat,
-  id.vars = factors,
-  measure.vars = patterns(
-    Accuracy = "^acc_(bic|icl|pmc)$",
-    Overfitting = "^over_(bic|icl|pmc)$",
-    Underfitting = "^under_(bic|icl|pmc)$"
-  ),
-  variable.name = "criterion"
-)
-
-enum_long[, criterion := factor(
-  criterion,
-  levels = 1:3,
-  labels = c("BIC", "ICL", "PMC")
-)]
-
-# Reshape simulation factors
-d <- melt(
-  enum_long,
-  id.vars = c("criterion", "Accuracy", "Overfitting", "Underfitting"),
-  measure.vars = factors,
-  variable.name = "condition",
-  value.name = "level",
-  variable.factor = FALSE
-)
-
-# Calculate proportions, averaging over all other factors
-d <- d[
-  ,
-  lapply(.SD, function(x) {
-    if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
-  }),
-  by = .(criterion, condition, level),
-  .SDcols = c("Accuracy", "Overfitting", "Underfitting")
-]
-
-# Reshape metrics into long format
-d <- melt(
-  d,
-  id.vars = c("criterion", "condition", "level"),
-  measure.vars = c("Accuracy", "Overfitting", "Underfitting"),
-  variable.name = "metric",
-  value.name = "value"
-)
-
-# Preserve metric and criterion ordering
-d[, metric := factor(
-  metric,
-  levels = c("Accuracy", "Overfitting", "Underfitting")
-)]
-
-d[, criterion := factor(
-  criterion,
-  levels = c("BIC", "ICL", "PMC")
-)]
-
-d[, condition := factor(
-  condition,
-  levels = factors
-)]
-
-# Preserve original factor-level ordering independently
-d[, factor_level := paste(
-  condition, as.character(level), sep = "__"
-)]
-
-x_levels <- unlist(
-  Map(
-    function(f, lev) paste(f, lev, sep = "__"),
-    names(factor_levels),
-    factor_levels
-  ),
-  use.names = FALSE
-)
-
-d[, factor_level := factor(
-  factor_level,
-  levels = x_levels
-)]
-
-# Remove factor prefixes from x-axis labels
-x_labels <- function(x) sub("^.*?__", "", x)
-
-# Plot
-g_enum <- ggplot(
-  d,
-  aes(
-    x = factor_level,
-    y = value,
-    color = metric,
-    shape = metric,
-    linetype = metric,
-    group = metric
-  )
-) +
-  geom_line(linewidth = 0.6, na.rm = TRUE) +
-  geom_point(size = 2, na.rm = TRUE) +
-  scale_color_manual(values = c(
-    "Accuracy" = "grey15",
-    "Overfitting" = "grey50",
-    "Underfitting" = "grey75"
-  )) +
-  scale_shape_manual(values = c(
-    "Accuracy" = 16,
-    "Overfitting" = 17,
-    "Underfitting" = 15
-  )) +
-  scale_x_discrete(labels = x_labels) +
+p <- plot_theme(df_enum, ribbons = F, lines_by = "outcome", panel = F) +
+  geom_hline(yintercept = .25, linetype = 2) +
+  scale_linetype_discrete(
+    name = "Outcome",
+    labels = function(x) parse(text = unname(my_labs[x]))
+  ) +
+  scale_shape_discrete(
+    name = "Outcome",
+    labels = function(x) parse(text = unname(my_labs[x]))
+  )+
   facet_grid(
-    criterion ~ condition,
-    scales = "free_x",
-    space = "free_x"
-  ) +
-  coord_cartesian(ylim = c(0, 1)) +
-  labs(
-    x = NULL,
-    y = "Proportion",
-    color = "Metric",
-    shape = "Metric",
-    linetype = "Metric"
-  ) +
-  base_theme
+    algorithm ~ factor,
+    scales = "free",
+    space = "free_x",
+    labeller = as_labeller(my_labs, default = label_parsed))+
+  scale_y_continuous(limits = c(0,1), breaks = seq(0, 1, by = .25))
 
-ggsave(
-  file.path(outdir, "plot_enumeration.pdf"),
-  g_enum,
-  width = 15,
-  height = 9
-)
-
+ggsave(file.path(outdir, paste0("plot_enum.pdf")), p, width = 29, height = 17, units = "cm")
 
 # Descriptive partial eta-squared. Treat simulation factors as categorical.
 # Sequential sums of squares depend on term order if the design is unbalanced.
-fac <- c("k", "classes", "vi", "r2", "p_ratio")
+
+# Select outcomes, excluding identifiers and factors
+outcomes <- setdiff(names(dat), c("m2ll", ignore, factors))
+
 
 partial_eta <- function(fit) {
   a <- anova(fit)
@@ -470,18 +303,13 @@ partial_eta <- function(fit) {
   )
 }
 
-# Select outcomes, excluding identifiers and factors
-outcomes <- c("bias_mu", "bias_tau", "bias_pi", "cov_mu", "cov_tau", "cov_pi", "acc_bic",
-              "acc_icl", "acc_pmc")
-
-
 effects <- list()
 
 for (outcome in outcomes) {
 
   d <- copy(dat[
     !is.na(get(outcome)),
-    c(fac, outcome),
+    c(factors, outcome),
     with = FALSE
   ])
 
@@ -499,12 +327,12 @@ for (outcome in outcomes) {
   if (nrow(d) < 10L ||
       uniqueN(d[[outcome]]) < 2L) next
 
-  # Remove unused factor levels
-  d[, (fac) := lapply(.SD, droplevels), .SDcols = fac]
+  # Treat simulation conditions as categorical
+  d[, (factors) := lapply(.SD, factor), .SDcols = factors]
 
   # Skip factors with fewer than two observed levels
-  valid_fac <- fac[
-    vapply(d[, ..fac], uniqueN, integer(1)) > 1L
+  valid_fac <- factors[
+    vapply(d[, ..factors], uniqueN, integer(1)) > 1L
   ]
 
   if (!length(valid_fac)) next
@@ -537,6 +365,7 @@ setcolorder(
   effect_sizes,
   c("outcome", "factor", "partial_eta2", "n")
 )
+
 effect_sizes <- dcast(
   effect_sizes,
   outcome ~ factor,
@@ -545,5 +374,5 @@ effect_sizes <- dcast(
 
 fwrite(
   effect_sizes,
-  file.path(outdir, "05_factor_effect_sizes.csv")
+  file.path(outdir, "factor_effect_sizes.csv")
 )

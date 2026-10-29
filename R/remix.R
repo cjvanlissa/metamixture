@@ -58,7 +58,9 @@ remix <- function(yi, vi,
                   classes = 2L,
                   mu = c("varying", "equal"),
                   tau2 = c("varying", "equal"),
-                  run = TRUE) {
+                  run = TRUE,
+                  ...) {
+  dots <- list(...)
   intervals = TRUE
   mu <- match.arg(mu)
   tau2 <- match.arg(tau2)
@@ -148,7 +150,7 @@ remix <- function(yi, vi,
         ncol = classes,
         free = TRUE,
         values = min(max(1e-7, stats::var(yi) - mean(vi)), max_tau2),
-        lbound = 1e-7,
+        lbound = 0,
         ubound = max_tau2,
         labels = if (tau2 == "varying") {
           paste0("tau2_", seq_len(classes))
@@ -335,7 +337,7 @@ remix <- function(yi, vi,
     )
     # Improve starting values
     if(classes > 1){
-      strts <- try(remix_starts(model), silent = TRUE)
+      strts <- try(remix_starts(model, splits = dots[["splits"]]), silent = TRUE)
       if(!inherits(strts, what = "try-error")){
         model <- strts
       } else {
@@ -344,7 +346,7 @@ remix <- function(yi, vi,
     }
 
     if (run) {
-      model <- mx_run_remix(model)
+      model <- mx_run_remix(model, use_random_starts = !isFALSE(dots[["random_starts"]]))
     }
     attr(model, "tidySEM") <- "mixture"
     return(model)

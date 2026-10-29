@@ -10,7 +10,8 @@ remix(
   classes = 2L,
   mu = c("varying", "equal"),
   tau2 = c("varying", "equal"),
-  run = TRUE
+  run = TRUE,
+  ...
 )
 }
 \arguments{

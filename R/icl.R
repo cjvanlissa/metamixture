@@ -34,16 +34,20 @@ posterior_from_logdens <- function(logdens, weights) {
 icl_mclust <- function(fit) icl(fit$z, fit$loglik, fit$df, fit$n)
 
 icl_mx <- function(model) {
+  z <- class_prob_individual_remix(model)
+  ll <- -0.5 * as.numeric(model$output$fit)
+  npar <- length(model$output$estimate)   # counts free parameters (respects equality labels)
+  icl(z, ll, npar, n = length(model$Y$values))
+}
+
+class_prob_individual_remix <- function(model){
   yi <- as.numeric(model$Y$values)
   vi <- as.numeric(model$V$values)
-  K <- sum(grepl("^Mu[0-9]+$", names(model@matrices)))
-  mu <- model@matrices$M$values[1,]
+  mu <- model@matrices$M$values[1, , drop = TRUE]
   tau2 <- diag(model@matrices$S$values)
+  K <- length(mu)
   w <- if (K == 1) 1 else as.numeric(OpenMx::mxEval(weights, model))
   logd <- sapply(seq_len(K), function(k) stats::dnorm(yi, mu[k], sqrt(vi + tau2[k]), log = TRUE))
   logd <- matrix(logd, ncol = K)
-  z <- posterior_from_logdens(logd, w)
-  ll <- -0.5 * as.numeric(model$output$fit)
-  npar <- length(model$output$estimate)   # counts free parameters (respects equality labels)
-  icl(z, ll, npar, n = length(yi))
+  posterior_from_logdens(logd, w)
 }

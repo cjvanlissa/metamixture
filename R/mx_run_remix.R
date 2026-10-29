@@ -1,4 +1,4 @@
-mx_run_remix <- function(model) {
+mx_run_remix <- function(model, use_random_starts = TRUE) {
   # Simulated annealing
   model_anneal <- try(
     OpenMx::mxRun(
@@ -22,12 +22,16 @@ mx_run_remix <- function(model) {
   if (mx_convergence(model_anneal, check = c("convergence", "fit"))$checks_pass) {
     model <- model_anneal
   } else {
-    model_randomstarts <- try(random_starts(model, verbose = FALSE), silent = TRUE)
+    if(use_random_starts){
+      model_randomstarts <- try(random_starts(model, verbose = FALSE), silent = TRUE)
 
-    if (mx_convergence(model_randomstarts, check = c("convergence", "fit"))$checks_pass) {
-      model <- model_randomstarts
+      if (mx_convergence(model_randomstarts, check = c("convergence", "fit"))$checks_pass) {
+        model <- model_randomstarts
+      } else {
+        warning("Neither simulated annealing nor random starts converged.")
+      }
     } else {
-      stop("Neither simulated annealing nor random starts converged.")
+      warning("Simulated annealing failed. Consider using random starts.")
     }
   }
 

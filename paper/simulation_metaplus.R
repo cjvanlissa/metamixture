@@ -409,7 +409,7 @@ summary_table <- data.table(
 )
 names(summary_table)[ncol(summary_table)-c(2:0)] <- paste0("Acc. ", c("mu", "tau2", "pi"))
 
-write.csv(summary_table, file.path(outdir, "coverage.csv"), row.names = FALSE)
+write.csv(summary_table, file.path(outdir, "summary_table.csv"), row.names = FALSE)
 
 # bettermodel <- prop.table(table(merged$m2ll_mx < merged$m2ll_mp))
 # cat("We conducted a simulation study with ", nrow(merged), "replications. Simulation conditions were ", deparse(hyper_parameters), ", chosen to align with the assumptions of metaplus.\n\n", file = "paper/results_metaplus.txt")

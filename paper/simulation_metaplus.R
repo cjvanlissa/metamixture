@@ -253,17 +253,175 @@ saveRDS(merged, file.path(outdir, paste0("sim_results_", Sys.Date(), ".RData")))
 
 # Analysis
 
-bettermodel <- prop.table(table(merged$m2ll_mx < merged$m2ll_mp))
-cat("We conducted a simulation study with ", nrow(merged), "replications. Simulation conditions were ", deparse(hyper_parameters), ", chosen to align with the assumptions of metaplus.\n\n", file = "paper/results_metaplus.txt")
-cat("In ", worcs::report(bettermodel[2]*100, equals = F), "% of replications, the remix model had a lower minus 2 log likelihood than the metaplus model, indicating that it found a better solution.\n\n", file = "paper/results_metaplus.txt", append = TRUE)
-ps <- c("mu", "tau", "pi")
-merged[, (paste0("diff_", ps)) := lapply(ps, function(p){abs(merged[[paste0("bias_", p, "_mp")]]) - abs(merged[[paste0("bias_", p, "_mx")]])})]
-out <- as.numeric(merged[, lapply(.SD, mean, na.rm = T), .SDcols = grep("diff_", names(merged))])
+library(data.table)
+dat <- readRDS(list.files("paper/metaplus/", pattern = "sim_results", full.names = T))
 
-cat("The difference in bias between the two methods was near-zero for all parameters:", paste0(ps, ": ", formatC(out, digits = 2, format = "f")),  "\n\n", file = "paper/results_metaplus.txt", append = TRUE)
+# Remove duplicated column names
+dat <- dat[, !duplicated(names(dat)), with = FALSE]
+dat[, conv_mx := is.finite(m2ll_mx)]
 
-out <- as.numeric(merged[, lapply(.SD, mean, na.rm = T), .SDcols = grep("cov_", names(merged))])
-cat("The methods had near-identical confidence interval coverage for mu, but metaplus did not return confidence intervals for tau2 or pi in any replication. While remix has the advantage of yielding confidence intervals, note that coverage was below nominal levels for all parameters.", paste0(grep("cov_", names(merged), value = T), ": ", formatC(out, digits = 2, format = "f")),  "\n\n", file = "paper/results_metaplus.txt", append = TRUE)
+# 1. Optimization performance ----------------------------
+
+optimization <- dat[, .(
+  n = .N,
+
+  # Number of converged models (1-4)
+  mean_conv_mx = mean(conv_mx, na.rm = TRUE),
+  mean_conv_mp = mean(conv_mp, na.rm = TRUE),
+
+  # Number of paired likelihood comparisons
+  n_ll = sum(is.finite(m2ll_mx) & is.finite(m2ll_mp)),
+
+  # Which method obtained the lower minus2LL?
+  better_mx = mean(m2ll_mx < m2ll_mp - 1e-4, na.rm = TRUE),
+  better_mp = mean(m2ll_mp < m2ll_mx - 1e-4, na.rm = TRUE),
+  equal_ll = mean(abs(m2ll_mx - m2ll_mp) <= 1e-4, na.rm = TRUE),
+
+  # Difference: positive means MX has better fit
+  #mean_ll_diff = mean(m2ll_mp - m2ll_mx, na.rm = TRUE),
+  #median_ll_diff = median(m2ll_mp - m2ll_mx, na.rm = TRUE),
+
+  # Runtime
+  #mean_time_mx = mean(time_mx, na.rm = TRUE),
+  #mean_time_mp = mean(time_mp, na.rm = TRUE),
+  median_time_mx = median(time_mx, na.rm = TRUE),
+  median_time_mp = median(time_mp, na.rm = TRUE)
+)]
+
+outdir <- "paper/metaplus/results"
+dir.create(outdir)
+
+write.csv(optimization, file.path(outdir, "optimization.csv"), row.names = FALSE)
+
+# Bias
+
+# Reshape bias estimates into long format
+bias_long <- melt(
+  dat,
+  measure.vars = patterns(
+    mx = "^bias_(mu|tau|pi)_mx$",
+    mp = "^bias_(mu|tau|pi)_mp$"
+  ),
+  variable.name = "parameter",
+  value.name = c("mx", "mp")
+)
+
+bias_long[, parameter := c("mu", "tau2", "pi")[parameter]]
+
+bias_table <- bias_long[, .(
+  n_mx = sum(!is.na(mx)),
+  n_mp = sum(!is.na(mp)),
+
+  mean_bias_mx = mean(mx, na.rm = TRUE),
+  mean_bias_mp = mean(mp, na.rm = TRUE),
+
+  mean_abs_bias_mx = mean(abs(mx), na.rm = TRUE),
+  mean_abs_bias_mp = mean(abs(mp), na.rm = TRUE),
+
+  rmse_mx = sqrt(mean(mx^2, na.rm = TRUE)),
+  rmse_mp = sqrt(mean(mp^2, na.rm = TRUE)),
+
+  # Among paired, nonmissing estimates
+  mx_more_accurate = mean(abs(mx) < abs(mp), na.rm = TRUE),
+  mp_more_accurate = mean(abs(mp) < abs(mx), na.rm = TRUE)
+), by = parameter]
+
+write.csv(bias_table, file.path(outdir, "bias.csv"), row.names = FALSE)
+
+# Coverage
+coverage_long <- melt(
+  dat,
+  measure.vars = patterns(
+    mx = "^cov_(mu|tau|pi)_mx$",
+    mp = "^cov_(mu|tau|pi)_mp$"
+  ),
+  variable.name = "parameter",
+  value.name = c("mx", "mp")
+)
+
+coverage_long[, parameter := c("mu", "tau2", "pi")[parameter]]
+
+coverage_table <- coverage_long[, .(
+  n_mx = sum(!is.na(mx)),
+  n_mp = sum(!is.na(mp)),
+
+  coverage_mx = if (all(is.na(mx))) NA_real_
+  else mean(mx, na.rm = TRUE),
+
+  coverage_mp = if (all(is.na(mp))) NA_real_
+  else mean(mp, na.rm = TRUE)
+
+  # Deviation from nominal 95% coverage
+  #deviation_mx = if (all(is.na(mx))) NA_real_
+  #else mean(mx, na.rm = TRUE) - 0.95,
+
+  #deviation_mp = if (all(is.na(mp))) NA_real_
+  #else mean(mp, na.rm = TRUE) - 0.95
+), by = parameter]
 
 
+write.csv(coverage_table, file.path(outdir, "coverage.csv"), row.names = FALSE)
 
+summary_table <- data.table(
+  method = c("remix", "metaplus"),
+
+  converged = c(
+    mean(dat$conv_mx, na.rm = TRUE),
+    mean(dat$conv_mp, na.rm = TRUE)
+  ),
+
+  runtime = c(
+    median(dat$time_mx, na.rm = TRUE),
+    median(dat$time_mp, na.rm = TRUE)
+  ),
+
+  MAE_mu = c(
+    mean(abs(dat$bias_mu_mx), na.rm = TRUE),
+    mean(abs(dat$bias_mu_mp), na.rm = TRUE)
+  ),
+
+  MAE_tau2 = c(
+    mean(abs(dat$bias_tau_mx), na.rm = TRUE),
+    mean(abs(dat$bias_tau_mp), na.rm = TRUE)
+  ),
+
+  MAE_pi = c(
+    mean(abs(dat$bias_pi_mx), na.rm = TRUE),
+    mean(abs(dat$bias_pi_mp), na.rm = TRUE)
+  ),
+
+
+  cov_mu = c(
+    mean(dat$cov_mu_mx, na.rm = TRUE),
+    mean(dat$cov_mu_mp, na.rm = TRUE)
+  ),
+
+  cov_tau2 = c(
+    mean(dat$cov_tau_mx, na.rm = TRUE),
+    NA_real_
+  ),
+
+  cov_pi = c(
+    mean(dat$cov_pi_mx, na.rm = TRUE),
+    NA_real_
+  ),
+  t(bias_table[, .SD, .SDcols = grep("more_accurate", names(bias_table))])
+)
+names(summary_table)[ncol(summary_table)-c(2:0)] <- paste0("Acc. ", c("mu", "tau2", "pi"))
+
+write.csv(summary_table, file.path(outdir, "coverage.csv"), row.names = FALSE)
+
+# bettermodel <- prop.table(table(merged$m2ll_mx < merged$m2ll_mp))
+# cat("We conducted a simulation study with ", nrow(merged), "replications. Simulation conditions were ", deparse(hyper_parameters), ", chosen to align with the assumptions of metaplus.\n\n", file = "paper/results_metaplus.txt")
+# cat("In ", worcs::report(bettermodel[2]*100, equals = F), "% of replications, the remix model had a lower minus 2 log likelihood than the metaplus model, indicating that it found a better solution.\n\n", file = "paper/results_metaplus.txt", append = TRUE)
+# ps <- c("mu", "tau", "pi")
+# merged[, (paste0("diff_", ps)) := lapply(ps, function(p){abs(merged[[paste0("bias_", p, "_mp")]]) - abs(merged[[paste0("bias_", p, "_mx")]])})]
+# out <- as.numeric(merged[, lapply(.SD, mean, na.rm = T), .SDcols = grep("diff_", names(merged))])
+#
+# cat("The difference in bias between the two methods was near-zero for all parameters:", paste0(ps, ": ", formatC(out, digits = 2, format = "f")),  "\n\n", file = "paper/results_metaplus.txt", append = TRUE)
+#
+# out <- as.numeric(merged[, lapply(.SD, mean, na.rm = T), .SDcols = grep("cov_", names(merged))])
+# cat("The methods had near-identical confidence interval coverage for mu, but metaplus did not return confidence intervals for tau2 or pi in any replication. While remix has the advantage of yielding confidence intervals, note that coverage was below nominal levels for all parameters.", paste0(grep("cov_", names(merged), value = T), ": ", formatC(out, digits = 2, format = "f")),  "\n\n", file = "paper/results_metaplus.txt", append = TRUE)
+#
+#
+#

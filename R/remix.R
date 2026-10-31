@@ -75,7 +75,7 @@ remix <- function(yi, vi,
   }
   if(length(classes) > 1){
     out <- lapply(classes, function(i){
-      remix_mx(yi = yi, vi = vi, classes = i, mu = mu, tau2 = tau2, run = run)
+      remix(yi = yi, vi = vi, classes = i, mu = mu, tau2 = tau2, run = run)
     })
     attr(out, "tidySEM") <- "list"
     class(out) <- c("mixture_list", class(out))

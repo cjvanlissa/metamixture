@@ -1,4 +1,67 @@
-mx_convergence <- function(model, check = c("convergence", "fit", "parameters", "standard_errors", "boundaries", "hessian"), ...) {
+#' Check Convergence of an `OpenMx` Model
+#'
+#' Evaluates convergence and numerical diagnostics for an `OpenMx` model.
+#'
+#' @param model A fitted [OpenMx::mxModel()] object.
+#' @param check Character vector specifying which diagnostics to perform out of
+#' `c("convergence", "fit", "parameters", "standard_errors", "boundaries",
+#' "hessian")`. Default: all diagnostics.
+#' @param tol Numeric atomic vector, indicating the tolerance for checking
+#' whether estimates are near their boundaries.
+#' @return A list containing:
+#' \describe{
+#'   \item{checks_pass}{Logical indicating whether all requested checks pass.}
+#'   \item{convergence_ok}{Logical indicating acceptable optimizer convergence.}
+#'   \item{fit_ok}{Logical indicating a finite model fit value.}
+#'   \item{parameters_ok}{Logical indicating finite parameter estimates.}
+#'   \item{boundaries_ok}{Logical indicating whether parameter boundary
+#'     checks pass.}
+#'   \item{standard_errors_ok}{Logical indicating whether standard errors
+#'     are available and valid.}
+#'   \item{hessian_ok}{Logical indicating whether the Hessian satisfies
+#'     the implemented diagnostic criteria.}
+#'   \item{warnings}{Character vector describing detected problems.}
+#' }
+#'
+#' @details
+#' Convergence diagnostics do not guarantee that the global maximum of the
+#' likelihood has been found. Boundary estimates and non-positive-definite
+#' Hessians may indicate weak identification. Boundary estimates do not
+#' necessarily imply optimization failure.
+#'
+#' @examples
+#' \dontrun{
+#' library(OpenMx)
+#' library(metamixture)
+#'
+#' set.seed(123)
+#' dat <- sim_mix_rma(n = 100)
+#'
+#' fit <- remix(dat$yi, dat$vi, classes = 2)
+#'
+#' # Run all convergence checks
+#' mx_convergence(fit)
+#'
+#' # Check only optimizer convergence and model fit
+#' mx_convergence(fit, check = c("convergence", "fit"))
+#'
+#' # Overall result
+#' mx_convergence(fit)$checks_pass
+#' }
+#' @export
+mx_convergence <- function(
+    model,
+    check = c(
+      "convergence", "fit", "parameters",
+      "standard_errors", "boundaries", "hessian"
+    ),
+
+) {
+  # Existing implementation
+}
+
+
+mx_convergence <- function(model, check = c("convergence", "fit", "parameters", "standard_errors", "boundaries", "hessian"), tol = 1e-6) {
   # If the model was wrapped in try() and that failed, return checks_pass = FALSE
   if (inherits(model, what = "try-error")) {
     return(list(checks_pass = FALSE))
@@ -21,7 +84,7 @@ mx_convergence <- function(model, check = c("convergence", "fit", "parameters", 
 
   # Boundary estimates
   boundaries <- tryCatch(
-    mx_boundary_estimates(model, ...),
+    mx_boundary_estimates(model, tol = tol),
     error = function(e) NULL
   )
 
@@ -90,7 +153,7 @@ mx_convergence <- function(model, check = c("convergence", "fit", "parameters", 
                   "Hessian is not positive definite.")
   }
 
-  list(
+  out <- list(
     checks_pass = checks_pass,
     convergence_ok = convergence_ok,
     fit_ok = fit_ok,
@@ -100,4 +163,44 @@ mx_convergence <- function(model, check = c("convergence", "fit", "parameters", 
     hessian_ok = hessian_ok,
     warnings = warnings
   )
+  class(out) <- c("mx_convergence", class(out))
+  return(out)
+}
+
+#' @export
+print.mx_convergence <- function(x, ...) {
+
+  cat("OpenMx convergence diagnostics\n")
+  cat("------------------------------\n")
+
+  checks <- c(
+    "Optimizer convergence" = x$convergence_ok,
+    "Model fit" = x$fit_ok,
+    "Parameter estimates" = x$parameters_ok,
+    "Parameter boundaries" = x$boundaries_ok,
+    "Standard errors" = x$standard_errors_ok,
+    "Hessian" = x$hessian_ok
+  )
+
+  for (i in seq_along(checks)) {
+    status <- if (is.na(checks[i])) {
+      "Not checked"
+    } else if (checks[i]) {
+      "OK"
+    } else {
+      "FAILED"
+    }
+    cat(sprintf("  %-24s %s\n", names(checks)[i], status))
+  }
+  cat("------------------------------\n")
+  cat(sprintf("  %-24s %s\n", "Overall", if (isTRUE(x$checks_pass)) "OK" else "FAILED"))
+
+  if (length(x$warnings)) {
+    cat("\nWarnings:\n")
+    for (w in x$warnings) {
+      cat(" -", w, "\n")
+    }
+  }
+
+  invisible(x)
 }

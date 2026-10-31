@@ -731,12 +731,76 @@ Bias diminished with larger sample sizes and greater separation between class me
 These results suggest that parameter bias depends on class separation.
 
 Across both studies, confidence interval coverage was below nominal levels for means and mixing proportions, while intervals for residual heterogeneity exceeded nominal levels.
-This 
-Class enumeration proved particularly challenging: all five methods performed poorly, primarily because they underestimated the number of classes. AIC and PMC performed best, although neither achieved substantially better than chance-level accuracy. These findings suggest that, even when mixture parameters can be estimated with reasonable accuracy, reliably identifying the underlying number of latent classes remains difficult.
+The near-perfect coverage for residual heterogeneity may indicate intervals that are too wide.
+We used information-based standard errors to compute all confidence intervals;
+it is possible that profile likelihood confidence intervals would perform better for residual heterogeneity, but further research is needed.
 
-Study 2 demonstrated that `remix` offers a computationally efficient and competitive alternative to the established `metaplus` implementation. Although `metaplus` converged more reliably, `remix` was considerably faster and achieved comparable or better average estimation accuracy for the pooled effect and residual heterogeneity. Differences between average absolute error and the frequency with which each method produced more accurate estimates suggest that their error distributions differ, with occasional large errors influencing average performance. However, confidence interval coverage remained below nominal levels, particularly for the heterogeneity variance and mixing proportion estimates obtained with `remix`. The corresponding intervals could not be evaluated for `metaplus` because they were unavailable.
+Class enumeration proved particularly challenging. 
+All methods under consideration performed poorly, mostly because they underestimated the number of classes.
+Given a trade-off between overfitting and underfitting, the latter is preferable for mixture models, whose parameter counts rapidly increases with the number of classes, which can lead to empirical under-identification when samples are small [@vanlissaRecommendedPracticesLatent2024].
+Nevertheless, here, parsimony clearly comes at the expense of inaccuracy.
+AIC and PMC performed best, but still barely exceeded change performance.
+These findings suggest that, even when mixture parameters can be estimated with reasonable accuracy, reliably identifying the underlying number of latent classes remains difficult.
 
-Taken together, these findings highlight both the potential and the limitations of random-effects mixture meta-analysis. Although the models can provide useful estimates of latent heterogeneity structures, reliable class enumeration and statistical inference remain challenging, particularly with small samples, weakly separated classes, or more complex mixtures. The results support the practical utility of `remix`, especially its computational efficiency and flexible model specification, but also indicate that convergence diagnostics, sensitivity analyses, and caution in interpreting class assignments and confidence intervals are essential.
+Study 2 demonstrated that `remix` offers a computationally efficient and competitive alternative to the existing `metaplus` package.
+Although `metaplus` converged more reliably, `remix` was much faster and achieved comparable or lower bias for the pooled effect and residual heterogeneity.
+When `metaplus` produced less accurate estimates than `remix`, its errors tended to be larger.
+One possible explanation which warrants further investigation is that the two implementations might apply different convergence criteria, with `remix` rejecting solutions that `metaplus` considers converged.
+Confidence interval coverage of both methods was comparable for the pooled effect sizes, but could not be compared for residual heterogeneity and mixing proportions because `metaplus` did not estimate these quantities.
+
+These results indicate that `remix` reliably estimates the parameters of random-effects mixture meta-analysis.
+However, statistical inference and reliable class enumeration remain challenging, particularly with small samples and poor class separation.
+
+### Strengths
+
+A strength of the present study is that it introduces the remix method for estimating random-effects mixture models, whose class means and heterogeneity parameters can be freely estimated, constrained to be equal, or fixed at specific values.
+We implemented this method in the `remix()` function of the `metamixture` package:
+a user-friendly wrapper with similar interface to existing functions like `metafor::rma(yi, vi)` for random-effects meta-analysis [@viechtbauerConductingMetaanalysesMetafor2010] and `tidySEM::mx_profiles()` [@vanlissaRecommendedPracticesLatent2024] for mixture models.
+The backend in `OpenMx` ensures efficient and fast estimation.
+Furthermore, it is a general-purpose structural equation modeling framework,
+which means models can be fully customized (e.g., with equality constraints, starting values, auxiliary variables) within its broader structural equation modeling framework.
+Wald standard errors and profile-likelihood confidence intervals are available out of the box in `OpenMx`,
+and the estimated models interface with many other packages.
+For example, it is straightforward to include predictors of class membership, or to use class as a predictor, via the weighted BCH approach [@bolckEstimatingLatentStructure2004], or via pseudo-class draws [@wangResidualDiagnosticsGrowth2005].
+These functions are implemented in `tidySEM`, along with functions for plotting and tabulating results [@vanlissaRecommendedPracticesLatent2024].
+
+### Limitations
+
+A key limitation of the method is that its confidence interval coverage is low.
+This appears to be a known limitation of mixture models, as prior work also reported coverage below nominal levels, particularly with small sample sizes and model misspecification [@nylundDecidingNumberClasses2007].
+Small sample sizes are common in meta-analysis, and indeed, most sample sizes in our simulation study were below the minimum size that has been considered in studies on regular mixture models.
+Mixture meta-analysis may be particularly sensitive to undercoverage  [@negeriBivariateFiniteMixture2025; @beathFiniteMixtureMethod2014],
+perhaps because of the additional heterogeneity introduced by sampling variance.
+Further research on the causes of poor confidence interval coverage is needed.
+
+Another limitation is the poor performance of all class enumeration methods. 
+This lack of power for class enumeration has been reported in previous work, especially for imperfect class separation [@teinStatisticalPowerDetect2013],
+which was the case in all our simulation conditions.
+While it is possible that some methods would perform better when classes are clearly separated, we wanted to investigate the more realistic scenario where class membership is ambiguous.
+Further research specifically focused on class enumeration methods could investigate conditions under which different class enumeration methods perform well.
+
+One further limitation is that our simulation study focused on situations where all population distributions are normal.
+When true effects follow skewed, heavy-tailed, or other non-normal distributions,
+class performance may deteriorate, as classes attempt to capture distributional idiosyncrasies [@asparouhovMisspecificationWhen2016].
+Future research could examine alternative within-class distributions.
+
+The models presented here assume independent effect sizes,
+but commonly, multiple effect sizes are extracted from each paper,
+yielding a nested data structure.
+Future approaches might examine extensions of the method presented here to dependent effect sizes or multilevel data structures.
+At present, the most straightforward approach would be to include all effect sizes in model estimation, ignoring the dependent structure, and then computing consistent standard errors for inference, using the sandwich estimator [@yuanMetaAnalyticalStructural2016].
+Alternatively, it is possible to re-fit the model repeatedly, using clustered bootstrapping - but this will be computationally expensive.
+
+### Recommendations for applied researchers
+
+Develop practical guidance on when mixture modeling is useful, how many classes to consider, how to assess convergence, and how to interpret posterior classifications.
+
+Recommend sensitivity analyses across model specifications and starting values, and caution against interpreting every additional class as a substantively distinct study population.
+
+
+
+## Conclusion
+
 
 Discuss implications
 
@@ -748,68 +812,6 @@ Discuss implications
     
 - Mixture modeling may guide subsequent moderator analyses by suggesting potential subgroup structure.
     
-
-### Strengths
-
-We implement this method in the `remix()` function of the `metamixture` package, with a backend in `OpenMx` - a flexible, customizable and extensible structural equation modeling framework.
-Using `OpenMx` to estimate `remix()` models has several advantages.
-First, `OpenMx` performs efficient optimization, and is very fast.
-Second, it is a general-purpose structural equation modeling framework,
-which means models can be fully customized (e.g., with equality constraints, starting values, auxiliary variables).
-It provides standard errors and profile-likelihood confidence intervals out of the box,
-and interfaces with many other packages for downstream analyses and tabulation and plotting of results [e.g., tidySEM, @vanlissaRecommendedPracticesLatent2024].
-
-
-Emphasize flexibility rather than novelty of the underlying mixture distribution.
-
-- Straightforward specification of location and scale mixtures.
-    
-- Explicit incorporation of known sampling variances.
-    
-- Equality constraints and alternative model structures.
-    
-- Flexible optimization and likelihood-based inference.
-    
-- Extensibility to more complex models.
-    
-
-### Limitations
-
-- Weak identification with overlapping or very small components.
-    
-- Dependence on sample size and class separation.
-    
-- Local maxima and sensitivity to initialization.
-    
-- Nonregular inference for boundary parameters and class enumeration.
-    
-- Potential for interpreting distributional approximations as substantive classes.
-    
-- Misspecification when true effects follow skewed, heavy-tailed, or continuously heterogeneous distributions rather than distinct latent classes.
-    
-
-### Recommendations for applied researchers
-
-Develop practical guidance on when mixture modeling is useful, how many classes to consider, how to assess convergence, and how to interpret posterior classifications.
-
-Recommend sensitivity analyses across model specifications and starting values, and caution against interpreting every additional class as a substantively distinct study population.
-
-### Future directions
-
-- Mixture meta-regression incorporating observed moderators.
-    
-- Multivariate and multilevel random-effects mixtures.
-    
-- Alternative within-class distributions.
-    
-- Bayesian estimation and uncertainty in class enumeration.
-    
-- Extensions to dependent effect sizes.
-    
-- More comprehensive simulation-based inference.
-    
-
-## Conclusion
 
 Reiterate that conventional random-effects meta-analysis models heterogeneity primarily through a single distribution, whereas finite mixture models offer a flexible way to investigate potentially more complex effect-size distributions.
 

@@ -49,18 +49,6 @@
 #' mx_convergence(fit)$checks_pass
 #' }
 #' @export
-mx_convergence <- function(
-    model,
-    check = c(
-      "convergence", "fit", "parameters",
-      "standard_errors", "boundaries", "hessian"
-    ),
-
-) {
-  # Existing implementation
-}
-
-
 mx_convergence <- function(model, check = c("convergence", "fit", "parameters", "standard_errors", "boundaries", "hessian"), tol = 1e-6) {
   # If the model was wrapped in try() and that failed, return checks_pass = FALSE
   if (inherits(model, what = "try-error")) {

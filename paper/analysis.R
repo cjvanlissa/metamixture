@@ -188,19 +188,20 @@ df_plot$level <- ordered(df_plot$level, levels = levels(df_plot$level)[order(as.
 df_plot$level <- droplevels(df_plot$level)
 # 1. Bias and absolute bias
 #ordered_levels <- unique(unlist(factor_levels, use.names = FALSE))
-df_bias <- copy(df_plot[grep("bias_(mu|ta|pi)", outcome), ])
-df_bias[, outcome := ordered(outcome, levels = paste0("bias_", c("mu", "tau", "pi")))]
+df_bias <- copy(df_plot[grep("bias_(abs_)?(mu|ta|pi)", outcome), ])
+df_bias[, type := ordered(grepl("abs", outcome), levels = c("FALSE", "TRUE"), labels = c("bias", "absolute bias"))]
+df_bias[, outcome := ordered(gsub("bias_(abs_)?", "", outcome), levels = c("mu", "tau", "pi"))]
 my_labs <- c(
   "k" = "K",
   "classes" = "C",
   "vi" = "v[i]",
   "es" = "Delta[mu]",
   "p_ratio" = "p[plain(ratio)]",
-  "bias_mu" = "mu",
-  "bias_tau" = "tau^2",
-  "bias_pi" = "pi"
+  "mu" = "mu",
+  "tau" = "tau^2",
+  "pi" = "pi"
 )
-p <- plot_theme(df_bias, ribbons = T) + geom_hline(yintercept = 0, linetype = 2)
+p <- plot_theme(df_bias, ribbons = F, lines_by = "type") + geom_hline(yintercept = 0, linetype = 2)
 p <- p + facet_grid(
   outcome ~ factor,
   scales = "free",
@@ -324,8 +325,8 @@ for (outcome in outcomes) {
   # Remove nonfinite observations
   d <- d[is.finite(get(outcome))]
 
-  if (nrow(d) < 10L ||
-      uniqueN(d[[outcome]]) < 2L) next
+  #if (nrow(d) < 10L ||
+  #    uniqueN(d[[outcome]]) < 2L) next
 
   # Treat simulation conditions as categorical
   d[, (factors) := lapply(.SD, factor), .SDcols = factors]

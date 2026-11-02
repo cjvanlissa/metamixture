@@ -31,6 +31,8 @@ classes to fit. Defaults to \code{1L:2L}.}
 estimated using OpenMx. If \code{FALSE}, the unestimated
 OpenMx model object is returned, allowing further modification
 before estimation.}
+
+\item{...}{Arguments passed to other functions.}
 }
 \value{
 A fitted model object, or a \code{"mixture_list"} when multiple class
@@ -52,10 +54,8 @@ likelihood optimization.
 }
 \examples{
 \dontrun{
-library(OpenMx)
-
 set.seed(7894)
-df <- sim_mix_rma2(n = 200, classes = 2, p_ratio = 1, r2 = 1)
+df <- sim_remix_fixed_tau()
 
 # Conventional random-effects meta-analysis
 res1 <- remix(df$yi, df$vi, classes = 1)

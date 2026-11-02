@@ -122,7 +122,7 @@ foreach(rownum = 1:nrow(summarydata), .packages = packagenames, .errorhandling =
     # Parameter estimates and coverage for the true model
     if (true_k %in% valid) {
       m2ll <- res_mx[[true_k]]@output$Minus2LogLikelihood
-      cp <- metamixture:::class_prob_individual_remix(model = res_mx[[true_k]])
+      cp <- metamixture:::extract_postprob_remix(model = res_mx[[true_k]])
       ent <- metamixture:::entropy(cp)
       mus <- res_mx[[true_k]]@matrices$M$values[1, ]
       min_mu <- which.min(abs(mus))

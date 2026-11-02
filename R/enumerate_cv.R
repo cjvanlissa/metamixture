@@ -63,9 +63,9 @@
 
 remix_nlpd <- function(model, yi, vi) {
 
-  mu <- as.numeric(OpenMx::mxEval(M, model))
-  tau2 <- diag(OpenMx::mxEval(S, model))
-  pi <- as.numeric(OpenMx::mxEval(weights, model))
+  mu <- as.numeric(OpenMx::mxEvalByName("M", model))
+  tau2 <- diag(OpenMx::mxEvalByName("S", model))
+  pi <- as.numeric(OpenMx::mxEvalByName("weights", model))
 
   K <- length(pi)
 
@@ -79,7 +79,7 @@ remix_nlpd <- function(model, yi, vi) {
       )
   }, numeric(length(yi)))
 
-  logdens <- matrix(logdens, ncol = K)
+  logdens <- matrix(logdens, nrow = length(yi), ncol = K)
 
   rowmax <- apply(logdens, 1, max)
 
@@ -115,7 +115,7 @@ cv_enumeration <- function(x, folds = 5L) {
 
       fit <- remix(yi = yi[train], vi = vi[train], classes = K, mu = c("varying", "equal")[mu_equal+1L], tau2 = c("varying", "equal")[tau_equal+1L], random_starts = FALSE)
       if(!mx_convergence(fit, check = "fit")$checks_pass){
-        fit <- random_starts(fit, verbose = FALSE)
+        fit <- tidySEM::random_starts(fit, verbose = FALSE)
       }
 
       # Evaluate held-out predictive score

@@ -4,13 +4,7 @@
 \alias{sandwich_remix}
 \title{Cluster-Robust Standard Errors for \code{remix} Models}
 \usage{
-sandwich_remix(
-  model,
-  cluster,
-  level = 0.95,
-  type = c("CR1", "CR0"),
-  rel_step = 1e-04
-)
+sandwich_remix(model, cluster, type = c("CR1", "CR0"), rel_step = 1e-04)
 }
 \arguments{
 \item{model}{A fitted OpenMx model created using \code{\link[=remix]{remix()}}.}
@@ -18,9 +12,6 @@ sandwich_remix(
 \item{cluster}{Vector identifying the cluster membership of each effect
 size, e.g., the study the effect size came from. Must have the same length
 and order as the observed effect sizes.}
-
-\item{level}{Confidence level for the Wald confidence intervals.
-Defaults to \code{0.95}.}
 
 \item{type}{Cluster-robust covariance estimator. Either \code{"CR1"}
 (default), applying the correction G/(G-1), or \code{"CR0"}, the
@@ -31,7 +22,8 @@ studies).}
 the analytic score function. Defaults to \code{1e-4}.}
 }
 \value{
-A list containing \code{results}, with cluster-robust parameter estimates,
+An \code{MxModel} with \code{attr("se_robust")} containing the standard errors,
+and \code{attr("sandwich")} with
 \code{vcov}, the cluster-robust covariance matrix, \code{vcov_free}, the cluster-robust
 covariance matrix for the unique free model parameters, \code{information},
 observed Fisher information matrix (negative Hessian of the log-likelihood),
@@ -59,36 +51,47 @@ library(OpenMx)
 library(metamixture)
 
 set.seed(1)
+
 n <- 100
-df <- metamixture::sim_mix_rma(n)
+df <- metamixture::sim_remix_fixed_tau(n, es = 2)
 
-# Fit model only to independent observations
 res1 <- remix(
-  yi = df$yi, vi = df$vi,
-  classes = 2, tau2 = "equal"
+  yi = df$yi,
+  vi = df$vi,
+  classes = 2,
+  tau2 = "equal"
 )
 
-# Duplicate observations and introduce small for effects from same study
-df <- rbind(df, df)
-df$yi[1:n] <- df$yi[1:n] + rnorm(n, sd = .01)
-df$study <- rep(seq_len(n), 2)
+# Original sample: one observation per cluster
+sw1 <- sandwich_remix(
+  res1,
+  cluster = seq_len(n),
+  type = "CR0"
+)
 
-# Fit model without accounting for dependence
+# Duplicate observations exactly
+df2 <- rbind(df, df)
+df2$study <- rep(seq_len(n), 2)
+
 res2 <- remix(
-  yi = df$yi, vi = df$vi,
-  classes = 2, tau2 = "equal"
+  yi = df2$yi,
+  vi = df2$vi,
+  classes = 2,
+  tau2 = "equal"
 )
 
-# Compare conventional and cluster-robust standard errors
-se_1 <- res1$output$standardErrors[1:3, 1]
-se_2 <- res2$output$standardErrors[1:3, 1]
-se_2_sw <- sandwich_remix(res2, df$study)$results$se[1:3]
+sw2 <- sandwich_remix(
+  res2,
+  cluster = df2$study,
+  type = "CR0"
+)
 
-# Conventional SEs underestimate uncertainty
-se_2 - se_1
-
-# Cluster-robust SEs account for dependence
-se_2_sw - se_1
+# Compare robust covariance matrices
+all.equal(
+  attr(sw1, "sandwich")$vcov,
+  attr(sw2, "sandwich")$vcov,
+  tolerance = 1e-3
+)
 }
 
 }

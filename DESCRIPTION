@@ -14,11 +14,13 @@ License: GPL-3
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-Imports:
-    methods,
+Depends:
+    R (>= 4.2.0),
+    OpenMx,
+    tidySEM (>= 0.3.0)
+Imports:  
     stats,
-    tidySEM (>= 0.3.0),
-    OpenMx
+    methods
 Suggests: 
     testthat (>= 3.0.0),
     future.apply

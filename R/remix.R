@@ -1,3 +1,13 @@
+utils::globalVariables(c(
+  "RowMax",
+  "Ones",
+  "LogTerms",
+  "RowMaxMatrix",
+  "ExpTerms",
+  "OnesCol",
+  "RowSumExp"
+))
+
 #' Random-Effects Mixture Meta-Analysis
 #'
 #' Fits finite mixture models for random-effects meta-analysis
@@ -23,14 +33,13 @@
 #' estimated using OpenMx. If \code{FALSE}, the unestimated
 #' OpenMx model object is returned, allowing further modification
 #' before estimation.
+#' @param ... Arguments passed to other functions.
 #' @return A fitted model object, or a `"mixture_list"` when multiple class
 #' counts are specified.
 #' @examples
 #' \dontrun{
-#' library(OpenMx)
-#'
 #' set.seed(7894)
-#' df <- sim_mix_rma2(n = 200, classes = 2, p_ratio = 1, r2 = 1)
+#' df <- sim_remix_fixed_tau()
 #'
 #' # Conventional random-effects meta-analysis
 #' res1 <- remix(df$yi, df$vi, classes = 1)
@@ -348,7 +357,7 @@ remix <- function(yi, vi,
     if (run) {
       model <- mx_run_remix(model, use_random_starts = !isFALSE(dots[["random_starts"]]))
     }
-    attr(model, "tidySEM") <- "mixture"
+    attr(model, "tidySEM") <- "remix"
     return(model)
   }
 }

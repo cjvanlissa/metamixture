@@ -19,9 +19,8 @@
 #'   sampling variances (`vi`), and true class memberships (`C`).
 #' @examples
 #' set.seed(123)
-#' dat <- sim_remix_fixed_tau(k = 200, classes = 2, p_ratio = 2, means = c(0.2, 0.8),
-#'                    tau2 = c(0.05, 0.10))
-#' head(dat)
+#' dat <- sim_remix_fixed_tau(k = 5)
+#' dat
 #' @export
 sim_remix_fixed_tau <- function(k = 100L, classes = 2L, p_ratio = 1, vi_range = c(.001, .01), es = 1) {
   if(classes > 1){
@@ -34,8 +33,8 @@ sim_remix_fixed_tau <- function(k = 100L, classes = 2L, p_ratio = 1, vi_range = 
   vi_range <- vi_range
   C <- sample(seq_len(classes), size = k, replace = TRUE, prob = ps)
 
-  vi_indiv <- runif(k, min = vi_range[2], max = vi_range[2])
-  yi <- rnorm(k, mean = mu[C], sd = sqrt(1 + vi_indiv))
+  vi_indiv <- stats::runif(k, min = vi_range[2], max = vi_range[2])
+  yi <- stats::rnorm(k, mean = mu[C], sd = sqrt(1 + vi_indiv))
 
   data.frame(
     yi = yi,

@@ -9,15 +9,14 @@
 #' @param cluster Vector identifying the cluster membership of each effect
 #' size, e.g., the study the effect size came from. Must have the same length
 #' and order as the observed effect sizes.
-#' @param level Confidence level for the Wald confidence intervals.
-#' Defaults to `0.95`.
 #' @param type Cluster-robust covariance estimator. Either `"CR1"`
 #' (default), applying the correction G/(G-1), or `"CR0"`, the
 #' unadjusted sandwich estimator, where G is the number of clusters (or,
 #' studies).
 #' @param rel_step Relative step size for numerical differentiation of
 #' the analytic score function. Defaults to `1e-4`.
-#' @return A list containing `results`, with cluster-robust parameter estimates,
+#' @return An `MxModel` with `attr("se_robust")` containing the standard errors,
+#' and `attr("sandwich")` with
 #' `vcov`, the cluster-robust covariance matrix, `vcov_free`, the cluster-robust
 #' covariance matrix for the unique free model parameters, `information`,
 #' observed Fisher information matrix (negative Hessian of the log-likelihood),
@@ -38,40 +37,51 @@
 #' library(metamixture)
 #'
 #' set.seed(1)
+#'
 #' n <- 100
-#' df <- metamixture::sim_mix_rma(n)
+#' df <- metamixture::sim_remix_fixed_tau(n, es = 2)
 #'
-#' # Fit model only to independent observations
 #' res1 <- remix(
-#'   yi = df$yi, vi = df$vi,
-#'   classes = 2, tau2 = "equal"
+#'   yi = df$yi,
+#'   vi = df$vi,
+#'   classes = 2,
+#'   tau2 = "equal"
 #' )
 #'
-#' # Duplicate observations and introduce small for effects from same study
-#' df <- rbind(df, df)
-#' df$yi[1:n] <- df$yi[1:n] + rnorm(n, sd = .01)
-#' df$study <- rep(seq_len(n), 2)
+#' # Original sample: one observation per cluster
+#' sw1 <- sandwich_remix(
+#'   res1,
+#'   cluster = seq_len(n),
+#'   type = "CR0"
+#' )
 #'
-#' # Fit model without accounting for dependence
+#' # Duplicate observations exactly
+#' df2 <- rbind(df, df)
+#' df2$study <- rep(seq_len(n), 2)
+#'
 #' res2 <- remix(
-#'   yi = df$yi, vi = df$vi,
-#'   classes = 2, tau2 = "equal"
+#'   yi = df2$yi,
+#'   vi = df2$vi,
+#'   classes = 2,
+#'   tau2 = "equal"
 #' )
 #'
-#' # Compare conventional and cluster-robust standard errors
-#' se_1 <- res1$output$standardErrors[1:3, 1]
-#' se_2 <- res2$output$standardErrors[1:3, 1]
-#' se_2_sw <- sandwich_remix(res2, df$study)$results$se[1:3]
+#' sw2 <- sandwich_remix(
+#'   res2,
+#'   cluster = df2$study,
+#'   type = "CR0"
+#' )
 #'
-#' # Conventional SEs underestimate uncertainty
-#' se_2 - se_1
-#'
-#' # Cluster-robust SEs account for dependence
-#' se_2_sw - se_1
+#' # Compare robust covariance matrices
+#' all.equal(
+#'   attr(sw1, "sandwich")$vcov,
+#'   attr(sw2, "sandwich")$vcov,
+#'   tolerance = 1e-3
+#' )
 #' }
 #'
 #' @export
-sandwich_remix <- function(model, cluster, level = 0.95,
+sandwich_remix <- function(model, cluster,
                            type = c("CR1", "CR0"),
                            rel_step = 1e-4) {
 
@@ -80,7 +90,9 @@ sandwich_remix <- function(model, cluster, level = 0.95,
   # Observed data
   yi <- as.numeric(model$Y$values)
   vi <- as.numeric(model$V$values)
-
+  if(!length(vi) == length(cluster)){
+    stop("Argument `cluster` must be a vector of the same length as the number of observations used to estimate `model`.")
+  }
   n <- length(yi)
   K <- ncol(model$M$values)
 
@@ -94,7 +106,7 @@ sandwich_remix <- function(model, cluster, level = 0.95,
   mu <- as.numeric(model$M$values[1, ])
   tau2 <- diag(model$S$values)
 
-  pi <- as.numeric(OpenMx::mxEval(weights, model))
+  pi <- as.numeric(OpenMx::mxEvalByName("weights", model))
 
   if (any(!is.finite(c(mu, tau2, pi))) || any(tau2 < 0) || any(pi <= 0)) {
     stop("Invalid fitted parameters.")
@@ -158,16 +170,7 @@ sandwich_remix <- function(model, cluster, level = 0.95,
 
     resid <- outer(yi, mu, "-")
 
-    logdens <- sweep(
-      -0.5 * (
-        log(2 * base::pi) +
-          log(s) +
-          resid^2 / s
-      ),
-      2,
-      log(pi),
-      "+"
-    )
+    logdens <- sweep(-0.5 * (log(2 * base::pi) + log(s) + resid^2 / s), 2, log(pi), "+")
 
     # Stable posterior probabilities
     rowmax <- apply(logdens, 1, max)
@@ -307,31 +310,19 @@ sandwich_remix <- function(model, cluster, level = 0.95,
   nm <- c(
     paste0("mu", seq_len(K)),
     paste0("tau2_", seq_len(K)),
-    paste0("pi", seq_len(K))
+    paste0("weights[1,", seq_len(K), "]")
   )
 
   dimnames(Vout) <- list(nm, nm)
 
   se <- sqrt(pmax(0, diag(Vout)))
   names(se) <- nm
-
-  estimates <- c(mu, tau2, pi)
-  names(estimates) <- nm
-
-  alpha <- 1 - level
-  crit <- stats::qt(1 - alpha / 2, df = G - 1)
-
-  out <- data.frame(
-    parameter = nm,
-    estimate = estimates,
+  ses <- data.frame(
+    label = nm,
     se = se,
-    lower = estimates - crit * se,
-    upper = estimates + crit * se
+    type = "sandwich"
   )
-
-
-  list(
-    results = out,
+  attr_list <- list(
     vcov = Vout,
     vcov_free = V,
     information = info,
@@ -341,4 +332,8 @@ sandwich_remix <- function(model, cluster, level = 0.95,
     npar = p,
     type = type
   )
+
+  attr(model, "se_robust") <- ses
+  attr(model, "sandwich") <- attr_list
+  return(model)
 }

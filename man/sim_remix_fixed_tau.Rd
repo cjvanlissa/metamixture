@@ -37,7 +37,6 @@ models, with class-specific means and residual heterogeneity.
 }
 \examples{
 set.seed(123)
-dat <- sim_remix_fixed_tau(k = 200, classes = 2, p_ratio = 2, means = c(0.2, 0.8),
-                   tau2 = c(0.05, 0.10))
-head(dat)
+dat <- sim_remix_fixed_tau(k = 5)
+dat
 }

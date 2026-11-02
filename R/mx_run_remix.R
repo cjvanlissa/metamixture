@@ -23,7 +23,7 @@ mx_run_remix <- function(model, use_random_starts = TRUE) {
     model <- model_anneal
   } else {
     if(use_random_starts){
-      model_randomstarts <- try(random_starts(model, verbose = FALSE), silent = TRUE)
+      model_randomstarts <- try(tidySEM::random_starts(model, verbose = FALSE), silent = TRUE)
 
       if (mx_convergence(model_randomstarts, check = c("convergence", "fit"))$checks_pass) {
         model <- model_randomstarts

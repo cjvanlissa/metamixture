@@ -8,5 +8,6 @@
 
 library(testthat)
 library(metamixture)
+library(tidySEM)
 
 test_check("metamixture")

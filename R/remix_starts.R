@@ -1,72 +1,167 @@
-remix_starts <- function(model,
-                           splits = NULL,
-                           ...){
-  if(!isTRUE(requireNamespace("OpenMx", quietly = TRUE))) {
-    return(NULL)
-  }
-  stopifnot("mxModel is not a `remix` model." = is_remix(model))
+remix_starts <- function(model, splits = NULL, ...) {
+  stopifnot(
+    "mxModel is not a remix model." = is_remix(model)
+  )
 
-  mu_equal <- length(unique(model$M$labels[1,])) == 1L
-  tau_equal <- length(unique(diag(model$S$labels))) == 1L
-  dl_overall <- dl_estimator(y = model@matrices$Y$values, v = model@matrices$V$values)
-  classes <- num_classes(model)
-  if(classes == 1L){
-    model@matrices$M$values[1,1] <- dl_overall["mu"]
-    model@matrices$S$values[1,1] <- dl_overall["tau2"]
+  classes <- num_classes_remix(model)
+
+  yi <- as.numeric(model$Y$values)
+  vi <- as.numeric(model$V$values)
+
+  mu_labels <- model$M$labels[1, ]
+  tau_labels <- diag(model$S$labels)
+
+  mu_equal <- all(!is.na(mu_labels)) &&
+    length(unique(mu_labels)) == 1L
+
+  tau_equal <- all(!is.na(tau_labels)) &&
+    length(unique(tau_labels)) == 1L
+
+  dl_overall <- dl_estimator(y = yi, v = vi)
+
+  # One-class model
+  if (classes == 1L) {
+    model$M$values[1, 1] <- dl_overall["mu"]
+    model$S$values[1, 1] <- dl_overall["tau2"]
     return(model)
   }
 
-  yi <- model@matrices$Y$values
-  if(is.null(splits)){
-    if (mu_equal && !tau_equal) {
-      cluster_data <- (as.numeric(yi) - dl_overall["mu"])^2 / (as.numeric(model$V$values) + dl_overall["tau2"])
-    } else {
-      cluster_data <- yi
-    }
+  # Choose clustering variable
+  if (mu_equal && !tau_equal) {
+    cluster_data <- (yi - dl_overall["mu"])^2 /
+      (vi + dl_overall["tau2"])
+  } else {
+    cluster_data <- yi
+  }
 
-    splits <- try({stats::kmeans(x = cluster_data, centers = classes)$cluster}, silent = TRUE)
-    if(inherits(splits, "try-error")){
-      message("Could not initialize clusters using K-means, switching to hierarchical clustering.")
-      splits <- try({stats::cutree(stats::hclust(dist(yi)), k = classes)}, silent = TRUE)
-      if(inherits(splits, "try-error")){
-        stop("Could not initialize clusters using hierarchical clustering. Consider using a different clustering method, or imputing missing data.")
+  # Initialize clusters
+  if (is.null(splits)) {
+
+    splits <- tryCatch(
+      stats::kmeans(
+        x = cluster_data,
+        centers = classes,
+        nstart = 20
+      )$cluster,
+      error = function(e) {
+        message(
+          "K-means initialization failed: ",
+          conditionMessage(e),
+          ". Switching to hierarchical clustering."
+        )
+        NULL
       }
+    )
+
+    if (is.null(splits)) {
+
+      splits <- tryCatch(
+        stats::cutree(
+          stats::hclust(
+            stats::dist(cluster_data)
+          ),
+          k = classes
+        ),
+        error = function(e) {
+          stop(
+            "Could not initialize clusters: ",
+            conditionMessage(e)
+          )
+        }
+      )
     }
   }
-  stopifnot("Number of unique values in splits must be identical to the number of latent classes." = length(unique(splits)) == classes)
 
-  # Handle small cats
-  splits <- repair_small_clusters(splits = splits, yi = cluster_data, min_size = 2L)
-
-  if (classes != length(unique(splits))) {
-    stop("Argument 'splits' does not identify a number of groups equal to 'classes'.")
+  # Validate supplied or estimated clusters
+  if (length(splits) != length(yi) ||
+      anyNA(splits) ||
+      length(unique(splits)) != classes) {
+    stop(
+      "'splits' must identify exactly ",
+      classes,
+      " nonempty clusters, with one assignment per observation."
+    )
   }
-  # Order splits from largest number to smallest
-  tab_split <- sort(table(splits), decreasing = TRUE)
-  splits <- as.integer(ordered(splits, levels = names(tab_split)))
 
-  dl_class <- lapply(seq_len(classes), function(i){
-      dl_estimator(y = model@matrices$Y$values[splits == i], v = model@matrices$V$values[splits == i])
+  # Repair small clusters
+  splits <- repair_small_clusters(
+    splits = splits,
+    yi = cluster_data,
+    min_size = 2L
+  )
+
+  if (length(unique(splits)) != classes) {
+    stop(paste0("Could not cluster cases into ", classes, " classes. Supply argument `splits` with cluster assignment."))
+  }
+
+  # Order clusters by size
+  tab_split <- sort(table(splits), decreasing = TRUE)
+  splits <- match(as.character(splits), names(tab_split))
+
+  # Class-specific starting values
+  dl_class <- lapply(seq_len(classes), function(i) {
+    dl_estimator(y = yi[splits == i], v = vi[splits == i])
   })
 
-  if(mu_equal){
-    model$M$values[1,] <- dl_overall["mu"]
-
+  # Means
+  if (mu_equal) {
+    model$M$values[1, ] <- dl_overall["mu"]
   } else {
-    model$M$values[1,] <- sapply(dl_class, `[`, "mu")
+    model$M$values[1, ] <- vapply(
+      dl_class,
+      `[[`,
+      numeric(1),
+      "mu"
+    )
   }
-
+  # Curtail starting values to parameter bounds
+  model$M$values[1, ] <- pmax(
+    model$M$lbound[1, ],
+    pmin(
+      model$M$ubound[1, ],
+      model$M$values[1, ]
+    )
+  )
+  # Heterogeneity variances
+  idx <- cbind(
+    seq_len(classes),
+    seq_len(classes)
+  )
   if (tau_equal) {
-    diag(model$S$values) <- rep(dl_overall["tau2"], classes)
+    model$S$values[idx] <- dl_overall["tau2"]
   } else {
-    diag(model$S$values) <- sapply(dl_class, `[`, "tau2")
+    model$S$values[idx] <- vapply(
+      dl_class,
+      `[[`,
+      numeric(1),
+      "tau2"
+    )
   }
+  # Curtail starting values to parameter bounds
+  model$S$values[idx] <- pmax(
+    model$S$lbound[idx],
+    pmin(
+      model$S$ubound[idx],
+      model$S$values[idx]
+    )
+  )
 
+  # Mixing proportions
   p_start <- as.numeric(tab_split) / length(splits)
-  model@matrices$Eta$values[1, ] <- p_to_eta(p_start)
-  model <- OpenMx::omxAssignFirstParameters(model)
-  return(model)
+
+  model$Eta$values[1, ] <- p_to_eta(p_start)
+  model$Eta$values[1, ] <- pmax(
+    model$Eta$lbound[1, ],
+    pmin(
+      model$Eta$ubound[1, ],
+      model$Eta$values[1, ]
+    )
+  )
+
+  # Synchronize equality-constrained parameters
+  OpenMx::omxAssignFirstParameters(model)
 }
+
 
 
 

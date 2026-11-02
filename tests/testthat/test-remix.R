@@ -52,7 +52,7 @@ testthat::test_that("equal means and varying heterogeneity are recovered", {
   testthat::expect_equal(diff(fit$M$values[1,]), 0, tolerance = 1e-10)
   testthat::expect_lt(abs(fit$M$values[1,1] - 0.25), 0.02)
   testthat::expect_true(all(abs(sort(diag(fit$S$values)) - c(0.015, 1.0)) < 0.02))
-  testthat::expect_equal(sort(metamixture:::remix_weights(fit)), c(.4, 0.60), tolerance = 0.05)
+  testthat::expect_true(all(sort(metamixture:::remix_weights(fit)) - c(.4, 0.60) < .05))
 })
 
 testthat::test_that("varying means and equal heterogeneity are recovered", {

@@ -10,7 +10,8 @@
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Random-Effects Mixture Models for Meta-Analysis">
+<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
+<meta property="og:title" content="Random-Effects Mixture Models for Meta-Analysis">
 <meta name="description" content="Generate, estimate, and report random-effects mixture (remix) models for meta-analysis. Model estimation relies on OpenMx, and tidy reporting relies occurs via tidySEM. The resulting models can be further customized and used for auxiliary variable analyses.">
 <meta property="og:description" content="Generate, estimate, and report random-effects mixture (remix) models for meta-analysis. Model estimation relies on OpenMx, and tidy reporting relies occurs via tidySEM. The resulting models can be further customized and used for auxiliary variable analyses.">
 </head>
@@ -50,8 +51,67 @@
   </div>
 </nav><div class="container template-home">
 <div class="row">
-  <main id="main" class="col-md-9">
-Generate, estimate, and report random-effects mixture ('remix') models for meta-analysis. Model estimation relies on 'OpenMx', and tidy reporting relies occurs via 'tidySEM'. The resulting models can be further customized and used for auxiliary variable analyses.
+  <main id="main" class="col-md-9"><div class="section level1">
+<div class="page-header"><h1 id="metamixture-">metamixture <a href="https://github.com/cjvanlissa/metamixture" class="external-link"><img src="https://github.com/cjvanlissa/metamixture/raw/master/metamixture_hex.png" align="right" height="139"></a>
+<a class="anchor" aria-label="anchor" href="#metamixture-"></a>
+</h1></div>
+<!-- badges: start -->
+
+<p>Generate, estimate, and report random-effects mixture (‘remix’) models for meta-analysis. Model estimation relies on ‘OpenMx’, and tidy reporting relies occurs via ‘tidySEM’. The resulting models can be further customized and used for auxiliary variable analyses.</p>
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
+<p>You can install the development version of metamixture from <a href="https://github.com/" class="external-link">GitHub</a> with:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"cjvanlissa/metamixture"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
+</h2>
+<p>Every user-facing function in the package is documented, and the documentation can be accessed by running <code>?function_name</code> in the R console, e.g., <code><a href="reference/remix.html">?remix</a></code>.</p>
+<p>Furthermore, there are vignettes:</p>
+<ul>
+<li>
+<a href="https://cjvanlissa.github.io/metamixture/articles/auxiliary.html">Auxiliary analysis</a>: Examine relationships between latent class membership and external variables using BCH, one-step and two-step maximum likelihood, and pseudo-class methods.</li>
+</ul>
+</div>
+<div class="section level2">
+<h2 id="citing-metamixture">Citing <code>metamixture</code>
+<a class="anchor" aria-label="anchor" href="#citing-metamixture"></a>
+</h2>
+<p>Please use the following citation for both the method and the R-package:</p>
+<blockquote>
+<p>Van Lissa, C. J. (2026, November 5). When One Random Effect Is Not Enough: Mixture Model Meta-Analysis. Retrieved from <a href="https://osf.io/preprints/psyarxiv/6b437_v1" class="external-link">osf.io/preprints/psyarxiv/6b437_v1</a></p>
+</blockquote>
+</div>
+<div class="section level2">
+<h2 id="contributing-and-contact-information">Contributing and Contact Information<a class="anchor" aria-label="anchor" href="#contributing-and-contact-information"></a>
+</h2>
+<p>If you have ideas, please get involved. You can contribute by opening an issue on ‘GitHub’, or sending a pull request with proposed features (see further instructions below).</p>
+<ul>
+<li>File a ‘GitHub’ issue <a href="https://github.com/cjvanlissa/metamixture" class="external-link">here</a>
+</li>
+<li>Make a pull request <a href="https://github.com/cjvanlissa/metamixture/pulls" class="external-link">here</a>
+</li>
+</ul>
+<p>By participating in this project, you agree to abide by the <a href="https://www.contributor-covenant.org/version/2/0/code_of_conduct.html" class="external-link">Contributor Covenant</a>.</p>
+<div class="section level3">
+<h3 id="pull-requests">Pull requests<a class="anchor" aria-label="anchor" href="#pull-requests"></a>
+</h3>
+<ul>
+<li>Please always contribute via pull request instead of committing to master, so I can review the contribution.
+<ul>
+<li>You can either fork the repository to your own account and then submit a pull request, or make minor changes directly on this repository, and choose to commit them to a different branch and send a pull request when you save those changes</li>
+</ul>
+</li>
+<li>If you fix an issue, in your Commit message, please write “closes #issuenumber” so we can trace which commits fixed which issues</li>
+<li>Please add a line to NEWS.md for each bug fix or feature contribution</li>
+<li>Please increment the minor version number in DESCRIPTION, e.g.: 0.2.3.1 -&gt; 0.2.3.2</li>
+</ul>
+</div>
+</div>
+</div>
   </main><aside class="col-md-3"><div class="license">
 <h2 data-toc-skip>License</h2>
 <ul class="list-unstyled">
@@ -74,7 +134,12 @@ Generate, estimate, and report random-effects mixture ('remix') models for meta-
 </ul>
 </div>
 
-
+<div class="dev-status">
+<h2 data-toc-skip>Dev status</h2>
+<ul class="list-unstyled">
+<li><a href="https://github.com/cjvanlissa/metamixture/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/cjvanlissa/metamixture/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
+</ul>
+</div>
 
   </aside>
 </div>

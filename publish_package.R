@@ -1,3 +1,5 @@
+devtools::spell_check()
+devtools::document()
 Sys.setenv(METAMIXTURE_RUN_EVERYTHING = "true")
 Sys.setenv(METAMIXTURE_SHOW_RESULTS = "true")
 f <- list.files(path = "vignettes", pattern = "Rmd$", full.names = TRUE)
@@ -6,7 +8,7 @@ for(thisf in f){
 }
 Sys.setenv(METAMIXTURE_RUN_EVERYTHING = "false")
 pkgdown::build_site()
-Sys.setenv(METAMIXTURE_SHOW_RESULTS = "true")
+Sys.setenv(METAMIXTURE_SHOW_RESULTS = "false")
 devtools::check()
 worcs::git_update("run everything in vignettes and update site")
 

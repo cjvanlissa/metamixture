@@ -5,7 +5,8 @@ utils::globalVariables(c(
   "RowMaxMatrix",
   "ExpTerms",
   "OnesCol",
-  "RowSumExp"
+  "RowSumExp",
+  "AuxExpTerms", "AuxLogTerms", "AuxOnes", "AuxOnesCol", "AuxRowMax", "AuxRowMaxMatrix", "AuxRowSumExp"
 ))
 
 #' Random-Effects Mixture Meta-Analysis

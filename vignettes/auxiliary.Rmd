@@ -12,6 +12,8 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 run_everything <- as.logical(toupper(Sys.getenv("METAMIXTURE_RUN_EVERYTHING", "false")))
 show_results <- as.logical(toupper(Sys.getenv("METAMIXTURE_SHOW_RESULTS", "false")))
 cache_dir <- "remix_auxiliary_cache"
+Sys.setenv(METAMIXTURE_CACHE_DIR = cache_dir)
+
 if (run_everything) dir.create(cache_dir, showWarnings = FALSE)
 ```
 

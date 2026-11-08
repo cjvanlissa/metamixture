@@ -1,5 +1,6 @@
 run_cached <- function(expr) {
-
+  run_everything <- as.logical(toupper(Sys.getenv("METAMIXTURE_RUN_EVERYTHING", "false")))
+  cache_dir <- Sys.getenv("METAMIXTURE_CACHE_DIR")
   # Capture code without evaluating
   expr <- substitute(expr)
 

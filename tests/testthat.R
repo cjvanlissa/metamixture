@@ -9,5 +9,5 @@
 library(testthat)
 library(metamixture)
 library(tidySEM)
-
+library(metafor)
 test_check("metamixture")

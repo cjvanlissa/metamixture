@@ -9,7 +9,10 @@ Authors@R: c(
       role = c("aut", "cre")
     )
   )
-Description: Fits meta-analytic finite mixture models.
+Description: Generate, estimate, and report random-effects mixture ('remix')
+    models for meta-analysis. Model estimation relies on 'OpenMx', and tidy
+    reporting relies occurs via 'tidySEM'. The resulting models can be further
+    customized and used for auxiliary variable analyses.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
@@ -18,11 +21,16 @@ Depends:
     R (>= 4.2.0),
     OpenMx,
     tidySEM (>= 0.3.0)
-Imports:  
+Imports: 
     stats,
     methods
 Suggests: 
     testthat (>= 3.0.0),
-    future.apply
+    future.apply,
+    metafor,
+    knitr,
+    rmarkdown
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.1.0
+VignetteBuilder: knitr
+URL: https://cjvanlissa.github.io/metamixture/

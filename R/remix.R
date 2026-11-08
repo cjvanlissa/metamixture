@@ -53,9 +53,6 @@ utils::globalVariables(c(
 #' res2 <- remix(df$yi, df$vi, classes = 2)
 #' table_fit(res2)
 #' table_results(res2)
-#tmp <- metamixture:::random_starts(res2)
-#table_fit(tmp)
-#table_results(tmp)
 #' }
 #'
 #' @references Van Lissa, C. J., Garnier-Villarreal, M., & Anadria, D. (2023).

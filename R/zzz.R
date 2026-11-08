@@ -25,4 +25,15 @@
     type = "remix",
     fun = num_classes_remix
   )
+  tidySEM::register_tidySEM_method(
+    generic = "predict_class",
+    type = "remix",
+    fun = predict_class_remix
+  )
+  tidySEM::register_tidySEM_method(
+    generic = "auxiliary_internal",
+    type = "remix",
+    fun = auxiliary_internal_remix
+  )
+
 }

@@ -25,33 +25,3 @@ random_starts_internal_remix <- function(
   x <- OpenMx::omxAssignFirstParameters(x)
   return(x)
 }
-
-
-
-# random_starts <- function(x,
-#                           ...
-# ) {
-#
-#   if(is.null(.Random.seed)){
-#     warning("First initialize the random number generator")
-#     invisible(stats::rnorm(1))
-#   }
-#   out <- seed_values <- vector("list", length = nstarts)
-#   for(i in seq_len(nstarts)){
-#     seed_values[[i]] <- .Random.seed
-#     out[[i]] <- random_starts_internal(x, ...)
-#   }
-#   if(!run) return(out)
-#   out <- lapply(out, OpenMx::mxRun, intervals = FALSE, silent = TRUE)
-#   tab_ll <- data.frame(seed = seq_along(seed_values), Minus2LogLikelihood = sapply(out, function(x){x$output$Minus2LogLikelihood}))
-#   if(sum(tab_ll$Minus2LogLikelihood - min(tab_ll$Minus2LogLikelihood) < tolerance_minus2ll) < 2){
-#     warning("The smallest Minus2LogLikelihood was not replicated.")
-#   }
-#   if(verbose) print(tab_ll)
-#   out <- out[[which.min(tab_ll$Minus2LogLikelihood)]]
-#   attr(out, "tab_ll") <- tab_ll
-#   attr(out, "seeds") <- seed_values
-#   return(out)
-# }
-#
-# random_starts_internal_remix <- function(x)

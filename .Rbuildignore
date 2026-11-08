@@ -3,3 +3,11 @@
 ^notes\.txt$
 ^paper$
 .*\.RData
+^publish_package\.R$
+^make_hex\.R$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^\.github$
+^README\.Rmd$
+^metamixture_hex\.png$

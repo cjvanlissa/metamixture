@@ -33,7 +33,6 @@
 #'
 #' @examples
 #' \dontrun{
-#' library(OpenMx)
 #' library(metamixture)
 #'
 #' set.seed(1)

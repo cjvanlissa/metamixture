@@ -44,8 +44,8 @@ table_results(res)
 
 # Compare estimated auxiliary means with true values
 OpenMx::omxGetParameters(res, free = TRUE)
-
 }
+
 two_step_internal_remix <- function(x, model, data, ...) {
   K <- num_classes(x)
   n <- nrow(x$Y$values)

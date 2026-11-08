@@ -1,0 +1,287 @@
+---
+title: "Auxiliary Analyses for Random-Effects Mixture Meta-Analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Auxiliary Analyses for Random-Effects Mixture Meta-Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+run_everything <- as.logical(toupper(Sys.getenv("METAMIXTURE_RUN_EVERYTHING", "false")))
+show_results <- as.logical(toupper(Sys.getenv("METAMIXTURE_SHOW_RESULTS", "false")))
+cache_dir <- "remix_auxiliary_cache"
+if (run_everything) dir.create(cache_dir, showWarnings = FALSE)
+```
+
+Random-effects mixture meta-analysis can reveal unobserved subgroups of studies with different underlying effects or heterogeneity.
+Once a `remix()` model has been estimated, researchers may wish to investigate whether those latent classes differ on an *auxiliary variable*: a study characteristic not used to fit the original mixture model.
+An auxiliary variable can be a predictor of class membership, or an outcome of class membership, or even an entire auxiliary model whose parameters differ between classes.
+
+This vignette illustrates three approaches available through the `tidySEM` ecosystem: Bolck–Croon–Hagenaars (BCH) weighting, pseudo-class draws, and two-step maximum likelihood. 
+These methods account for class-membership uncertainty in different ways.
+There are important differences between their underlying assumptions.
+
+## Simulating Data
+
+We will simulate data from two latent subpopulations with different true effect sizes `yi` and their sampling variances `vi`.
+An auxiliary variable `z` is a study characteristic associated with class membership but was not included in the original mixture fit.
+
+```{r example-code, eval=TRUE}
+library(metamixture)
+library(tidySEM)
+library(OpenMx)
+
+set.seed(956)
+n <- 200
+class_true <- sample(1:2, n, replace = TRUE, prob = c(0.55, 0.45))
+vi <- runif(n, 0.02, 0.12)
+yi <- rnorm(n, mean = c(0, 2)[class_true], sd = sqrt(vi + 0.3))
+z <- rnorm(n, mean = c(0, 1)[class_true], sd = 1)
+
+dat <- data.frame(yi = yi, vi = vi, z = z)
+```
+
+Next, we fit the `remix` model:
+
+```{r fitremix, echo = FALSE}
+fit <- metamixture:::run_cached({
+  remix(
+    yi = dat$yi,
+    vi = dat$vi,
+    classes = 2,
+    tau2 = "equal"
+  )
+})
+```
+
+```{r eval = FALSE}
+fit <- remix(
+  yi = dat$yi,
+  vi = dat$vi,
+  classes = 2,
+  tau2 = "equal"
+  )
+```
+
+
+### Inspect the class solution
+
+Before conducting auxiliary analyses, let's inspect model fit, the estimated class proportions, and posterior class-membership probabilities.
+Poor separation makes it particularly important not to treat modal assignments as observed classes.
+
+```{r inspect-code, eval=TRUE}
+table_fit(fit)
+```
+
+For a two-class solution, we can glean a lot of information from the fit table. We see that the classes are approximately equally sized: `n_min` is the proportion of the sample assigned to the smallest class, and `n_max` the proportion assigned to the largest class.
+
+We also see that cases belonging to each true class have a high posterior probability of being assigned to the matching latent class (`prob_min` and `prob_max`).
+These two quantities are derived from the classification probabilities table:
+
+```{r}
+class_prob(fit, "mostlikely.class")
+```
+
+If C is the true class of an observation (in rows), and N is the assigned class based on highest posterior class probability (in columns),
+then this table shows the probability that cases that belong to true class C are assigned to latent class N.
+The diagonal thus represents the probability that observations in each class will be correctly classified (classification accuracy); values near 1 are excellent.
+
+The fit table also gives an overall metric of class separation: the entropy criterion.
+Values over $0.80$ indicate good separation.
+If separation was excellent - say $0.95$ or greater - then we could essentially tread predicted class as an observed variable, with little measurement error:
+
+```{r}
+metamixture:::predict_class_remix(fit)
+```
+
+Yet even with such excellent correct classification probabilities, errors will occur:
+
+```{r}
+table(true = class_true, pred = metamixture:::predict_class_remix(fit))
+```
+
+Therefore, we must account for classification error somehow.
+
+
+## BCH: comparing a distal outcome across classes
+
+The BCH method uses classification-error-adjusted weights to estimate class-specific auxiliary models without re-estimating the measurement model.
+Note that the auxiliary data must have exactly the same number of cases in the same order as the observations used to estimate `remix()`.
+Be careful: prepare one `data.frame` for your `remix()` analysis and the subsequent auxiliary analyses, then select your variables from the same `data.frame` to prevent mix-ups.
+Do not independently sort or filter the auxiliary data after fitting the measurement model.
+
+For a single continuous auxiliary variable, the simplest call is:
+
+```{r}
+bch_fit <- BCH(fit, data = dat$z)
+table_results(bch_fit)
+```
+
+We see that the mean of class 2 is higher than that of class 1.
+Note that the standard errors of BCH analyses are not valid.
+Do not interpret the resulting p-values as if they properly account for classification error.
+
+We can test the significance of the mean difference with a likelihood ratio test:
+
+```{r}
+bch_test <- lr_test(bch_fit, compare = "M")
+bch_test
+```
+
+Note that, for a single auxiliary variable, a significant between-class difference can be interpreted either as evidence that class causes differences in this auxiliary variable - or as evidence that the auxiliary variable causes class membership.
+The interpretation depends on theoretical assumptions, not statistical results.
+
+## Two-step maximum likelihood
+
+Two-step maximum likelihood starts from a fitted measurement model, fixes its parameters and mixing proportions, and then estimates class-specific auxiliary parameters using the joint likelihood.
+Unlike modal assignment, this likelihood integrates over uncertain class membership.
+It can therefore produce valid standard errors that account for classification uncertainty.
+
+```{r twostep, echo=FALSE}
+fit_two <- metamixture:::run_cached({
+two_step(
+  x = fit,
+  model = "z ~ 1",
+  data = dat["z"]
+)})
+```
+
+```{r eval=FALSE}
+fit_two <- two_step(
+  x = fit,
+  model = "z ~ 1",
+  data = dat["z"]
+)
+```
+
+We can get the results as follows:
+
+```{r}
+table_results(fit_two)
+```
+
+Notice the message informing you that adjusted standard errors were used for the auxiliary parameters.
+These adjusted standard errors are valid for inference on the auxiliary parameters, as they take classification uncertainty into account.
+
+As with `BCH()`, it is possible to perform likelihood ratio tests on parameter matrices, for example, the `M` matrix (means):
+
+```{r}
+lr_test(fit_two, compare = "M")
+```
+
+
+## One-step estimation
+
+Another approach is the one-step solution, which jointly estimates the measurement and auxiliary models.
+In a one-step model, the inclusion of the auxiliary model can influence the estimated class solution.
+This is appropriate when the goal is to estimate a single joint model,
+but may be less desirable when researchers want to perform follow-up analyses on a previously established class solution.
+
+The one-step method has the same interface as `BCH()` and `two_step()`:
+
+```{r}
+fit_one <- one_step(
+  x = fit,
+  data = dat$z
+)
+table_results(fit_one,  columns = c("label", "est", "se", "confint", "group"))
+```
+
+Note that the results include *all* model parameters, including the latent class parameters, as they are all free in this model.
+Compare these results to those of the measurement model, and the two-step solution.
+Note that the class parameters are not reported in the results of `fit_two`, as they are fixed and excluded from model optimization:
+
+```{r}
+table_results(fit, columns = c("label", "est", "se", "confint"))
+table_results(fit_two, columns = c("label", "est", "se", "confint", "group"))
+```
+
+Notice that the estimates for the measurement model differ in the one-step model, as the auxiliary variable influences their estimation.
+Two-step estimation instead preserves the original measurement model.
+
+
+## Pseudo-class analysis
+
+A different solution for accounting for classification uncertainty is pseudo-class analysis.
+It generates multiple datasets; in each datasets, individual studies' latent class membership is randomly drawn with probabilities corresponding to its posterior class probabilities.
+Thus, a study with class probabilities `c(0.97, 0.03)` will be assigned to class 1 in 97% of datasets, whereas a study with class probabilities `c(0.45, 0.55)` will be assigned to class 1 in 45% of datasets.
+
+The auxiliary analysis is fitted in each dataset, and estimates are pooled across datasets, thus incorporating the classification uncertainty.
+
+### Predicting an Outcome from Class Membership
+
+The following example estimates class-specific means using an ordinary linear model.
+The `class` variable is generated by the pseudo-class procedure.
+Using the model specification `~ factor(class)` means that we treat class as a two-group factor (otherwise it will incorrectly be treated as numeric!),
+and `-1` means the intercept should be removed from the model, so we get two class-specific means in the output:
+
+```{r}
+pseudo_fit <- tidySEM::pseudo_class(
+  x = fit,
+  model = lm(z ~ factor(class) - 1, data = data),
+  data = dat["z"],
+  m = 20
+)
+pseudo_fit
+```
+
+Unlike BCH and two-step estimation, pseudo-class analysis can accommodate auxiliary analyses implemented using any ordinary R modeling functions, as long as they are compatible with the pooling methods supported by `tidySEM`.
+
+### Predicting Class Membership from an Auxiliary Variable
+
+So far, we have examined whether latent classes differ on auxiliary variables.
+We can also reverse the question: Can auxiliary variables predict latent class membership?
+
+For example, suppose we expect that the true population effect is zero, but that when research on this effect was first introduced, early studies all reported large positive effects due to publication bias (and/or questionable research practices).
+In such a case, study characteristic `z` might represent "year of publication".
+Our theory implies the hypothesis that `z` causes class membership.
+
+To test this hypothesis, we can use `pseudo_class()` to repeatedly draw plausible class assignments from the posterior probabilities, fit a logistic regression in each dataset, and pool the regression estimates.
+
+
+```{r}
+# Predict latent class membership from an auxiliary variable
+set.seed(783)
+pred <- pseudo_class(
+  x = fit,
+  model = glm(
+    I(as.integer(class) == 2L) ~ z,
+    data = data,
+    family = binomial()
+  ),
+  data = data.frame(z = dat$z),
+  m = 10
+)
+pred
+```
+
+The regression estimates the association between `z` and the log odds of belonging to class 2 rather than class 1.
+A negative coefficient indicates that higher values of `z` are associated with greater odds of class 1 membership.
+We see that this effect is significant; thus, it is plausible that publication year explains the different classes.
+
+The present model can use logistic regression because there are only two classes.
+If there are more than two classes, multinomial logistic regression would be more appropriate, e.g.:
+
+```
+pred <- pseudo_class(
+  x = fit,
+  model = function(data) {
+    nnet::multinom(
+      factor(class) ~ z,
+      data = data,
+      trace = FALSE
+    )
+  },
+  data = data.frame(z = dat$z),
+  m = 10
+)
+```
+
+
+## Reporting auxiliary analyses
+
+When reporting auxiliary analyses, describe the measurement model and class enumeration, the auxiliary variable and its measurement scale, the estimation method, and the way classification uncertainty was handled.
+Report class-specific estimates with uncertainty intervals and specify whether standard errors are valid (as in `one_step()` and `pseudo_class()`, but not `BCH()`), and whether they are adjusted for first-stage estimation (as in `two_step()`).
+

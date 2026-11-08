@@ -1,10 +1,4 @@
 simulate_remix <- function(x, add_vi = TRUE){
-  UseMethod("simulate_remix", x)
-}
-
-#' @method simulate_remix MxModel
-#' @export
-simulate_remix.MxModel <- function(x, add_vi = TRUE){
   nsim = x$data$numObs
   classes <- num_classes(x)
   cp <- extract_postprob_remix(x)

@@ -42,13 +42,3 @@ sim_remix_fixed_tau <- function(k = 100L, classes = 2L, p_ratio = 1, vi_range = 
     C = C
   )
 }
-
-
-# sim_mix_rma <- function(n = 100, vi_range = c(.01, .10), classes = 3, probs = rep(1/classes, classes), means = seq(from = 0, by = .2, length.out = classes), tau2 = rep(.1, classes)){
-#   vi <- runif(n, vi_range[1], vi_range[2])
-#   C <- sample.int(classes, n, replace = TRUE, prob = probs)
-#   yi <- rnorm(n,
-#               mean = means[C],
-#               sd = sqrt(vi + tau2[C]))
-#   data.frame(yi = yi, vi = vi, C = C)
-# }

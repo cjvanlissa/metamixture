@@ -47,7 +47,6 @@ number of clusters is small or mixture parameters are weakly identified.
 }
 \examples{
 \dontrun{
-library(OpenMx)
 library(metamixture)
 
 set.seed(1)

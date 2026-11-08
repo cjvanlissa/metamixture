@@ -6,3 +6,5 @@ notes.txt
 *.rds
 *.RDS
 *.RData
+inst/doc
+docs

@@ -98,3 +98,21 @@ testthat::test_that("invalid constraint configurations are rejected", {
   )
 })
 
+testthat::test_that("remix documentation examples work", {
+  skip_if_not_installed("metafor")
+  set.seed(7894)
+  df <- sim_remix_fixed_tau(es = 3)
+
+  # Conventional random-effects meta-analysis
+  res1 <- remix(df$yi, df$vi, classes = 1)
+  res_mf <- metafor::rma(yi = df$yi, vi = df$vi)
+  expect_equal(unname(res_mf$b[1,1]), unname(res1$M$values[1, 1]), tolerance = .01)
+  expect_equal(unname(res_mf$tau2), unname(res1$S$values[1, 1]), tolerance = .04)
+
+  # Two-class random-effects mixture model
+  res2 <- remix(df$yi, df$vi, classes = 2)
+  expect_true((res2@output$Minus2LogLikelihood - 392.4908) < .05)
+  expect_true(all(as.numeric(res2$M$values) - c(3, 0) < .2))
+
+})
+

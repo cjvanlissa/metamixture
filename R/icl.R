@@ -19,13 +19,3 @@ icl <- function(z, loglik, npar, n = nrow(z)) {
   bic <- -2 * loglik + npar * log(n)
   bic + 2 * entropy}, error = function(e){NA})
 }
-
-
-icl_mclust <- function(fit) icl(fit$z, fit$loglik, fit$df, fit$n)
-
-icl_mx <- function(model) {
-  z <- extract_postprob_remix(model)
-  ll <- -0.5 * as.numeric(model$output$fit)
-  npar <- length(model$output$estimate)   # counts free parameters (respects equality labels)
-  icl(z, ll, npar, n = length(model$Y$values))
-}

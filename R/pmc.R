@@ -1,62 +1,130 @@
-pmc <- function(x, ..., reps = 100, ci = .95){
-  if(inherits(x[[1]], "MxModel")) return(pmc_mx(x = x, reps = reps, ci = ci, ...))
-}
-
-#' @importFrom stats median
-pmc_mx <- function(x, ..., reps = 100, ci = .95){
-  if (length(x) < 2L) {
-    stop("At least two models are required.")
-  }
-  #nams <- c("comparison", "null", "alt", "null_stat", "alt_stat", "lb_dif",
-  #          "ub_dif", "sig")
-  nams <- tryCatch(vapply(x, function(m) m@name, character(1)), error = function(e){paste0("model ", seq_len(length(x)))})
-  rep_stat <- vapply(seq_along(x), FUN.VALUE = numeric(reps), FUN = function(i) {
-    if(requireNamespace("future.apply", quietly = TRUE)){
-      do.call(c, future.apply::future_replicate(
-        n = reps,
-        future.seed = TRUE,
-        simplify = FALSE,
-        expr = {
-          as.numeric(surprisal(
-            x = drop(x[[1]]$Y$values),
-            y = simulate_remix(x[[i]], add_vi = TRUE)$yi
-          ))
-        }
-      ))
-    } else {
-      replicate(reps, {
-        as.numeric(surprisal(
-          x = drop(x[[1]]$Y$values),
-          y = simulate_remix(x[[i]], add_vi = TRUE)$yi
-        ))
-      })
-    }
-  })
-  # Get summary statistics and prepare output
-  meds <- apply(rep_stat, 2, stats::median)
-  names(meds) <- nams
-  cis <- list(
-    dif_seq = rep_stat[, 2:dim(rep_stat)[2], drop = FALSE] - rep_stat[, 1:(dim(rep_stat)-1L)[2], drop = FALSE],
-    dif_one = rep_stat[, 2:dim(rep_stat)[2], drop = FALSE] - rep_stat[, rep(1, (dim(rep_stat)[2]-1L)), drop = FALSE]
-  )
-  cis <- do.call(rbind, lapply(cis, function(i){matrix(as.vector(apply(i, 2, stats::quantile, probs = c(((1-ci)/2), 1-((1-ci)/2)))), ncol = 2, byrow = TRUE)}))
-  colnames(cis) <- c("lb", "ub")
-  out <- data.frame(
-    null = c(nams[1:(length(nams)-1L)], rep(nams[1], (length(nams)-1L))),
-    alt = rep(nams[2:length(nams)], 2))
-  out <- data.frame(comparison = rep(c("dif_seq", "dif_one"), each = nrow(out)/2),
-                    out)
-  out$null_stat <- meds[out$null]
-  out$alt_stat <- meds[out$alt]
-  out <- data.frame(out, cis, sig = c("", "*")[(apply(sign(cis), 1, sum) == -2)+1L])
-  class(out) <- c("pmc_df", class(out))
-  attr(out, "stat") <- "surprisal"
-  return(out)
-}
-
-
-pmc_mx2 <- function(x, ..., reps = 100L, ci = 0.95,
-                   nboot = 1000L) {
+#' Class Enumeration Using Predictive Surprisal
+#'
+#' Compares random-effects mixture meta-analysis models using
+#' simulation-based predictive surprisal. For each candidate model,
+#' repeated datasets are simulated, and kernel density estimation
+#' (KDE) is used to evaluate the surprisal of the observed effect
+#' sizes under the simulated distribution.
+#'
+#' @param x A list of at least two fitted `remix` models, typically
+#' representing different numbers of latent classes. All models
+#' must be fitted to the same observed effect sizes.
+#' @param ... Additional arguments passed to [surprisal()].
+#' @param reps Integer. Number of simulated datasets generated
+#' for each candidate model. Defaults to 100.
+#' @param ci Numeric. Confidence level for the bootstrap confidence
+#' intervals of differences in mean surprisal. Defaults to 0.95.
+#' @param nboot Integer. Number of bootstrap replications used
+#' to estimate confidence intervals for differences in mean
+#' surprisal. Defaults to 100.
+#'
+#' @details
+#' For each candidate model, the function generates `reps`
+#' simulated datasets.
+#'
+#' For each simulated dataset, [surprisal()] estimates the
+#' distribution of the simulated effect sizes using kernel
+#' density estimation and evaluates the surprisal of the
+#' observed effect sizes under this distribution.
+#'
+#' The mean surprisal across simulated datasets is used as
+#' a measure of predictive discrepancy. Smaller values indicate
+#' that the simulated distributions assign greater density to
+#' the observed effect sizes and therefore provide a better
+#' approximation to the observed data.
+#'
+#' Two types of model comparisons are performed:
+#' \describe{
+#' \item{dif_seq}{Compares each model with the preceding model
+#'   in the supplied list.}
+#' \item{dif_one}{Compares each model with the first model
+#'   in the supplied list.}
+#' }
+#'
+#' For each comparison, the difference is calculated as
+#' the mean surprisal of the alternative model minus the
+#' mean surprisal of the reference model:
+#'
+#' \deqn{\Delta = \bar{S}_{alt} - \bar{S}_{null}}
+#'
+#' Negative differences favor the alternative model.
+#'
+#' Confidence intervals are obtained using a nonparametric
+#' percentile bootstrap. The simulated surprisal scores
+#' for the two models are independently resampled with
+#' replacement, and the difference in their means is
+#' recalculated for each bootstrap replication.
+#'
+#' A comparison is marked with an asterisk (`*`) when the
+#' upper confidence limit is below zero, indicating that
+#' the alternative model has significantly lower mean
+#' surprisal at the specified confidence level.
+#'
+#' If the `future.apply` package is installed, simulations
+#' are evaluated using [future.apply::future_replicate()],
+#' allowing parallel execution when an appropriate
+#' `future` plan has been configured. Otherwise, the
+#' function uses sequential replication.
+#'
+#' The function uses random simulation and bootstrap
+#' resampling. Use [set.seed()] for reproducibility.
+#'
+#' @return
+#' A data.frame of class `pmc_df` containing:
+#' \describe{
+#' \item{comparison}{Comparison type: `dif_seq` or `dif_one`.}
+#' \item{null}{Name of the reference model.}
+#' \item{alt}{Name of the alternative model.}
+#' \item{null_stat}{Mean simulated-data surprisal for the
+#'   reference model.}
+#' \item{alt_stat}{Mean simulated-data surprisal for the
+#'   alternative model.}
+#' \item{difference}{Difference in mean surprisal
+#'   (`alt_stat - null_stat`).}
+#' \item{lb}{Lower bootstrap confidence limit.}
+#' \item{ub}{Upper bootstrap confidence limit.}
+#' \item{sig}{An asterisk (`*`) if the upper confidence
+#'   limit is below zero; otherwise an empty string.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' library(metamixture)
+#'
+#' set.seed(123)
+#'
+#' # Simulate meta-analytic data
+#' dat <- sim_remix_fixed_tau(k = 100, es = 2)
+#'
+#' # Fit candidate models
+#' models <- lapply(1:3, function(k) {
+#' remix(
+#'   yi = dat$yi,
+#'   vi = dat$vi,
+#'   classes = k,
+#'   tau2 = "equal"
+#' )
+#' })
+#'
+#' # Compare models using predictive surprisal
+#' pmc <- pmc_surprisal(
+#' models,
+#' reps = 100,
+#' nboot = 500
+#' )
+#'
+#' # Model comparisons
+#' pmc
+#'
+#' # Simulated surprisal scores
+#' head(attr(pmc, "scores"))
+#' }
+#'
+#'
+#' @importFrom stats median quantile
+#' @export
+pmc_surprisal <- function(x, ..., reps = 100L, ci = 0.95,
+                   nboot = 100L) {
 
   if (length(x) < 2L) {
     stop("At least two models are required.")
@@ -223,6 +291,5 @@ pmc_mx2 <- function(x, ..., reps = 100L, ci = 0.95,
   class(out) <- c("pmc_df", class(out))
   attr(out, "stat") <- "mean simulated-data KDE surprisal"
   attr(out, "scores") <- rep_stat
-
   out
 }

@@ -19,13 +19,13 @@ mx_run_remix <- function(model, use_random_starts = TRUE) {
   }
 
   # Random starts if necessary
-  if (mx_convergence(model_anneal, check = c("convergence", "fit"))$checks_pass) {
+  if (mx_diagnostics(model_anneal, check = c("convergence", "fit"))$checks_pass) {
     model <- model_anneal
   } else {
     if(use_random_starts){
       model_randomstarts <- try(tidySEM::random_starts(model, verbose = FALSE), silent = TRUE)
 
-      if (mx_convergence(model_randomstarts, check = c("convergence", "fit"))$checks_pass) {
+      if (mx_diagnostics(model_randomstarts, check = c("convergence", "fit"))$checks_pass) {
         model <- model_randomstarts
       } else {
         warning("Neither simulated annealing nor random starts converged.")

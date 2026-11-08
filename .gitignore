@@ -7,3 +7,6 @@ notes.txt
 *.RDS
 *.RData
 inst/doc
+
+!vignettes/remix_auxiliary_cache/
+!vignettes/remix_auxiliary_cache/**

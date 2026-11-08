@@ -13,8 +13,17 @@ run_everything <- as.logical(toupper(Sys.getenv("METAMIXTURE_RUN_EVERYTHING", "f
 show_results <- as.logical(toupper(Sys.getenv("METAMIXTURE_SHOW_RESULTS", "false")))
 cache_dir <- "remix_auxiliary_cache"
 Sys.setenv(METAMIXTURE_CACHE_DIR = cache_dir)
+if(!dir.exists(cache_dir)){
+  dir.create(cache_dir, showWarnings = FALSE)
+  cat(
+  "\n!vignettes/remix_auxiliary_cache/\n",
+  "!vignettes/remix_auxiliary_cache/**\n",
+  file = "../.gitignore",
+  append = TRUE,
+  sep = ""
+)
+}
 
-if (run_everything) dir.create(cache_dir, showWarnings = FALSE)
 ```
 
 Random-effects mixture meta-analysis can reveal unobserved subgroups of studies with different underlying effects or heterogeneity.

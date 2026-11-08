@@ -17,6 +17,7 @@ knitr::opts_chunk$set(
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/cjvanlissa/metamixture/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/cjvanlissa/metamixture/actions/workflows/R-CMD-check.yaml)
+[![check_no_suggests](https://github.com/cjvanlissa/metamixture/actions/workflows/check_no_suggests.yaml/badge.svg)](https://github.com/cjvanlissa/metamixture/actions/workflows/check_no_suggests.yaml)
 <!-- badges: end -->
 
 `r yaml::read_yaml("DESCRIPTION")$Description`

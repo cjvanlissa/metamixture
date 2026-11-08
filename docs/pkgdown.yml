@@ -1,0 +1,9 @@
+pandoc: 3.6.3
+pkgdown: 2.2.1
+pkgdown_sha: ~
+articles:
+  auxiliary: auxiliary.html
+last_built: 2026-11-08T07:50Z
+urls:
+  reference: https://cjvanlissa.github.io/metamixture/reference
+  article: https://cjvanlissa.github.io/metamixture/articles

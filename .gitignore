@@ -10,3 +10,6 @@ inst/doc
 
 !vignettes/remix_auxiliary_cache/
 !vignettes/remix_auxiliary_cache/**
+
+!vignettes/cache_auxiliary/
+!vignettes/cache_auxiliary/**

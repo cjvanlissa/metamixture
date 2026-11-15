@@ -23,7 +23,8 @@ Depends:
     tidySEM (>= 0.3.0)
 Imports: 
     stats,
-    methods
+    methods,
+    ggplot2
 Suggests: 
     testthat (>= 3.0.0),
     future.apply,

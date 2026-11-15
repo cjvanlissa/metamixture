@@ -86,9 +86,9 @@ true effect sizes <code>yi</code> and their sampling variances
 characteristic associated with class membership but was not included in
 the original mixture fit.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">metamixture</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://cjvanlissa.github.io/metamixture/">metamixture</a></span><span class="op">)</span></span>
 <span><span class="co">#&gt; Loading required package: OpenMx</span></span>
-<span><span class="co">#&gt; Warning: package 'OpenMx' was built under R version 4.6.1</span></span>
+<span><span class="co">#&gt; Warning: package 'OpenMx' was built under R version 4.6.2</span></span>
 <span><span class="co">#&gt; Loading required package: tidySEM</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://cjvanlissa.github.io/tidySEM/" class="external-link">tidySEM</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://openmx.ssri.psu.edu/" class="external-link">OpenMx</a></span><span class="op">)</span></span>
@@ -187,23 +187,22 @@ filter the auxiliary data after fitting the measurement model.</p>
 <p>For a single continuous auxiliary variable, the simplest call is:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">bch_fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/BCH.html" class="external-link">BCH</a></span><span class="op">(</span><span class="va">fit</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">z</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/table_results.html" class="external-link">table_results</a></span><span class="op">(</span><span class="va">bch_fit</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Warning: Unavailable columns requested: class</span></span>
-<span><span class="co">#&gt;                label est_sig   se pval       confint  group</span></span>
-<span><span class="co">#&gt; 1     Means.y.class1   -0.02 0.09 0.82 [-0.20, 0.16] class1</span></span>
-<span><span class="co">#&gt; 2 Variances.y.class1 0.91*** 0.12 0.00  [0.67, 1.15] class1</span></span>
-<span><span class="co">#&gt; 3     Means.y.class2 0.96*** 0.11 0.00  [0.74, 1.17] class2</span></span>
-<span><span class="co">#&gt; 4 Variances.y.class2 1.10*** 0.16 0.00  [0.78, 1.43] class2</span></span></code></pre></div>
+<span><span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/table_results.html" class="external-link">table_results</a></span><span class="op">(</span><span class="va">bch_fit</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">#&gt;              label est_sig   se pval       confint group</span></span>
+<span><span class="co">#&gt; 1     Means.y.aux1   -0.02 0.09 0.82 [-0.20, 0.16]  aux1</span></span>
+<span><span class="co">#&gt; 2 Variances.y.aux1 0.91*** 0.12 0.00  [0.67, 1.15]  aux1</span></span>
+<span><span class="co">#&gt; 3     Means.y.aux2 0.96*** 0.11 0.00  [0.74, 1.17]  aux2</span></span>
+<span><span class="co">#&gt; 4 Variances.y.aux2 1.10*** 0.16 0.00  [0.78, 1.43]  aux2</span></span></code></pre>
 <p>We see that the mean of class 2 is higher than that of class 1. Note
 that the standard errors of BCH analyses are not valid. Do not interpret
 the resulting p-values as if they properly account for classification
 error.</p>
 <p>We can test the significance of the mean difference with a likelihood
 ratio test:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">bch_test</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/lr_test.html" class="external-link">lr_test</a></span><span class="op">(</span><span class="va">bch_fit</span>, compare <span class="op">=</span> <span class="st">"M"</span><span class="op">)</span></span>
-<span><span class="va">bch_test</span></span>
-<span><span class="co">#&gt; BCH test for equality across classes</span></span>
+<span><span class="va">bch_test</span></span></code></pre></div>
+<pre><code><span><span class="co">#&gt; BCH test for equality across classes</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Overall likelihood ratio test:</span></span>
 <span><span class="co">#&gt;  LL_baseline LL_restricted   LL_dif df            p</span></span>
@@ -211,7 +210,7 @@ ratio test:</p>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Pairwise comparisons using likelihood ratio tests:</span></span>
 <span><span class="co">#&gt;  Model1 Model2 LL_baseline LL_restricted   LL_dif df            p</span></span>
-<span><span class="co">#&gt;  class1 class2    566.1196      607.5235 41.40394  1 1.238077e-10</span></span></code></pre></div>
+<span><span class="co">#&gt;    aux1   aux2    566.1196      607.5235 41.40394  1 1.238077e-10</span></span></code></pre>
 <p>Note that, for a single auxiliary variable, a significant
 between-class difference can be interpreted either as evidence that
 class causes differences in this auxiliary variable - or as evidence
@@ -227,16 +226,15 @@ class-specific auxiliary parameters using the joint likelihood. Unlike
 modal assignment, this likelihood integrates over uncertain class
 membership. It can therefore produce valid standard errors that account
 for classification uncertainty.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_two</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/two_step.html" class="external-link">two_step</a></span><span class="op">(</span></span>
 <span>  x <span class="op">=</span> <span class="va">fit</span>,</span>
 <span>  model <span class="op">=</span> <span class="st">"z ~ 1"</span>,</span>
 <span>  data <span class="op">=</span> <span class="va">dat</span><span class="op">[</span><span class="st">"z"</span><span class="op">]</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>We can get the results as follows:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/table_results.html" class="external-link">table_results</a></span><span class="op">(</span><span class="va">fit_two</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Warning: Unavailable columns requested: class</span></span>
 <span><span class="co">#&gt;              label est_sig   se pval       confint group</span></span>
 <span><span class="co">#&gt; 1     Means.z.aux1   -0.03 0.09 0.72 [-0.22, 0.15]  aux1</span></span>
 <span><span class="co">#&gt; 2 Variances.z.aux1 0.96*** 0.13 0.00  [0.71, 1.22]  aux1</span></span>
@@ -253,9 +251,9 @@ classification uncertainty into account.</p>
 <p>As with <code><a href="https://cjvanlissa.github.io/tidySEM/reference/BCH.html" class="external-link">BCH()</a></code>, it is possible to perform likelihood
 ratio tests on parameter matrices, for example, the <code>M</code>
 matrix (means):</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/lr_test.html" class="external-link">lr_test</a></span><span class="op">(</span><span class="va">fit_two</span>, compare <span class="op">=</span> <span class="st">"M"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; BCH test for equality across classes</span></span>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/lr_test.html" class="external-link">lr_test</a></span><span class="op">(</span><span class="va">fit_two</span>, compare <span class="op">=</span> <span class="st">"M"</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">#&gt; BCH test for equality across classes</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Overall likelihood ratio test:</span></span>
 <span><span class="co">#&gt;  LL_baseline LL_restricted   LL_dif df            p</span></span>
@@ -263,7 +261,7 @@ matrix (means):</p>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Pairwise comparisons using likelihood ratio tests:</span></span>
 <span><span class="co">#&gt;  Model1 Model2 LL_baseline LL_restricted   LL_dif df            p</span></span>
-<span><span class="co">#&gt;    aux1   aux2    1145.927      1187.533 41.60663  1 1.116141e-10</span></span></code></pre></div>
+<span><span class="co">#&gt;    aux1   aux2    1145.927      1187.533 41.60663  1 1.116141e-10</span></span></code></pre>
 </div>
 <div class="section level2">
 <h2 id="one-step-estimation">One-step estimation<a class="anchor" aria-label="anchor" href="#one-step-estimation"></a>
@@ -276,13 +274,13 @@ may be less desirable when researchers want to perform follow-up
 analyses on a previously established class solution.</p>
 <p>The one-step method has the same interface as <code><a href="https://cjvanlissa.github.io/tidySEM/reference/BCH.html" class="external-link">BCH()</a></code> and
 <code><a href="https://cjvanlissa.github.io/tidySEM/reference/two_step.html" class="external-link">two_step()</a></code>:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_one</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/one_step.html" class="external-link">one_step</a></span><span class="op">(</span></span>
 <span>  x <span class="op">=</span> <span class="va">fit</span>,</span>
 <span>  data <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">z</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/table_results.html" class="external-link">table_results</a></span><span class="op">(</span><span class="va">fit_one</span>,  columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"label"</span>, <span class="st">"est"</span>, <span class="st">"se"</span>, <span class="st">"confint"</span>, <span class="st">"group"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;               label   est   se       confint group</span></span>
+<span><span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/table_results.html" class="external-link">table_results</a></span><span class="op">(</span><span class="va">fit_one</span>,  columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"label"</span>, <span class="st">"est"</span>, <span class="st">"se"</span>, <span class="st">"confint"</span>, <span class="st">"group"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">#&gt;               label   est   se       confint group</span></span>
 <span><span class="co">#&gt; 1      Means.y.aux1 -0.03 0.09 [-0.22, 0.15]  aux1</span></span>
 <span><span class="co">#&gt; 2  Variances.y.aux1  0.96 0.13  [0.71, 1.22]  aux1</span></span>
 <span><span class="co">#&gt; 3      Means.y.aux2  1.00 0.11  [0.78, 1.22]  aux2</span></span>
@@ -292,14 +290,14 @@ analyses on a previously established class solution.</p>
 <span><span class="co">#&gt; 7        Means.2.NA  2.05 0.07  [1.92, 2.19]  &lt;NA&gt;</span></span>
 <span><span class="co">#&gt; 8    Variances.1.NA  0.25 0.04  [0.18, 0.32]  &lt;NA&gt;</span></span>
 <span><span class="co">#&gt; 9   weights[1,1].NA  0.56 0.04  [0.49, 0.63]  &lt;NA&gt;</span></span>
-<span><span class="co">#&gt; 10  weights[1,2].NA  0.44 0.04  [0.37, 0.51]  &lt;NA&gt;</span></span></code></pre></div>
+<span><span class="co">#&gt; 10  weights[1,2].NA  0.44 0.04  [0.37, 0.51]  &lt;NA&gt;</span></span></code></pre>
 <p>Note that the results include <em>all</em> model parameters,
 including the latent class parameters, as they are all free in this
 model. Compare these results to those of the measurement model, and the
 two-step solution. Note that the class parameters are not reported in
 the results of <code>fit_two</code>, as they are fixed and excluded from
 model optimization:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/table_results.html" class="external-link">table_results</a></span><span class="op">(</span><span class="va">fit</span>, columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"label"</span>, <span class="st">"est"</span>, <span class="st">"se"</span>, <span class="st">"confint"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt;          label   est   se       confint</span></span>
 <span><span class="co">#&gt; 1         eta1  0.20 0.15 [-0.10, 0.50]</span></span>
@@ -347,20 +345,17 @@ the pseudo-class procedure. Using the model specification
 factor (otherwise it will incorrectly be treated as numeric!), and
 <code>-1</code> means the intercept should be removed from the model, so
 we get two class-specific means in the output:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pseudo_fit</span> <span class="op">&lt;-</span> <span class="fu">tidySEM</span><span class="fu">::</span><span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/pseudo_class.html" class="external-link">pseudo_class</a></span><span class="op">(</span></span>
 <span>  x <span class="op">=</span> <span class="va">fit</span>,</span>
 <span>  model <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/lm.html" class="external-link">lm</a></span><span class="op">(</span><span class="va">z</span> <span class="op">~</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">class</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1</span>, data <span class="op">=</span> <span class="va">data</span><span class="op">)</span>,</span>
 <span>  data <span class="op">=</span> <span class="va">dat</span><span class="op">[</span><span class="st">"z"</span><span class="op">]</span>,</span>
 <span>  m <span class="op">=</span> <span class="fl">20</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Registered S3 method overwritten by 'lme4':</span></span>
-<span><span class="co">#&gt;   method           from</span></span>
-<span><span class="co">#&gt;   na.action.merMod car</span></span>
-<span><span class="va">pseudo_fit</span></span>
-<span><span class="co">#&gt;             term    estimate  std.error   statistic       df      p.value</span></span>
-<span><span class="co">#&gt; 1 factor(class)1 0.000166715 0.09841807 0.001693947 186.0779 9.986502e-01</span></span>
-<span><span class="co">#&gt; 2 factor(class)2 0.936606202 0.11272493 8.308775861 161.8635 3.691711e-14</span></span></code></pre></div>
+<span><span class="va">pseudo_fit</span></span></code></pre></div>
+<pre><code><span><span class="co">#&gt;             term     estimate  std.error   statistic       df      p.value</span></span>
+<span><span class="co">#&gt; 1 factor(class)1 -0.009397288 0.09880393 -0.09511047 183.4078 9.243309e-01</span></span>
+<span><span class="co">#&gt; 2 factor(class)2  0.940805406 0.11191065  8.40675490 161.8759 2.066414e-14</span></span></code></pre>
 <p>Unlike BCH and two-step estimation, pseudo-class analysis can
 accommodate auxiliary analyses implemented using any ordinary R modeling
 functions, as long as they are compatible with the pooling methods
@@ -383,7 +378,7 @@ membership.</p>
 repeatedly draw plausible class assignments from the posterior
 probabilities, fit a logistic regression in each dataset, and pool the
 regression estimates.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Predict latent class membership from an auxiliary variable</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">783</span><span class="op">)</span></span>
 <span><span class="va">pred</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://cjvanlissa.github.io/tidySEM/reference/pseudo_class.html" class="external-link">pseudo_class</a></span><span class="op">(</span></span>
@@ -396,10 +391,10 @@ regression estimates.</p>
 <span>  data <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>z <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">z</span><span class="op">)</span>,</span>
 <span>  m <span class="op">=</span> <span class="fl">10</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">pred</span></span>
-<span><span class="co">#&gt;          term   estimate std.error statistic       df      p.value</span></span>
+<span><span class="va">pred</span></span></code></pre></div>
+<pre><code><span><span class="co">#&gt;          term   estimate std.error statistic       df      p.value</span></span>
 <span><span class="co">#&gt; 1 (Intercept) -0.6089003 0.1921151 -3.169455 123.7412 1.924902e-03</span></span>
-<span><span class="co">#&gt; 2           z  0.8992796 0.1891752  4.753687  86.3312 7.913785e-06</span></span></code></pre></div>
+<span><span class="co">#&gt; 2           z  0.8992796 0.1891752  4.753687  86.3312 7.913785e-06</span></span></code></pre>
 <p>The regression estimates the association between <code>z</code> and
 the log odds of belonging to class 2 rather than class 1. A negative
 coefficient indicates that higher values of <code>z</code> are

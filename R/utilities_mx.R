@@ -26,3 +26,7 @@ p_from_parameters <- function(x){
   posteriors <- exp(logdens - row_max)
   return(colMeans(posteriors/rowSums(posteriors)))
 }
+
+.get_varnames_remix <- function(x, ...) {
+  "yi"
+}

@@ -29,7 +29,7 @@ test_that("two_step auxiliary likelihood uses probability units", {
     )
   )
 
-  manual <- dnorm(
+  manual <- stats::dnorm(
     z,
     mean = aux$M$values[1, "z"],
     sd = sqrt(aux$S$values["z", "z"])

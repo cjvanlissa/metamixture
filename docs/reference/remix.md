@@ -68,10 +68,9 @@ followed by maximum likelihood optimization.
 
 ## References
 
-Van Lissa, C. J., Garnier-Villarreal, M., & Anadria, D. (2023).
-Recommended Practices in Latent Class Analysis using the Open-Source
-R-Package tidySEM. Structural Equation Modeling.
-[doi:10.1080/10705511.2023.2250920](https://doi.org/10.1080/10705511.2023.2250920)
+Van Lissa, C. J. (2026, November 5). When One Random Effect Is Not
+Enough: Mixture Model Meta-Analysis. Retrieved from
+<https://osf.io/preprints/psyarxiv/6b437_v1>
 
 ## Examples
 

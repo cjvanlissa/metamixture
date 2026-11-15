@@ -35,5 +35,11 @@
     type = "remix",
     fun = auxiliary_internal_remix
   )
+  tidySEM::register_tidySEM_method(
+    generic = "plot_density",
+    type = "remix",
+    fun = plot_density_remix
+  )
+
 
 }

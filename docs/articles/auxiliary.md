@@ -26,7 +26,7 @@ but was not included in the original mixture fit.
 ``` r
 library(metamixture)
 #> Loading required package: OpenMx
-#> Warning: package 'OpenMx' was built under R version 4.6.1
+#> Warning: package 'OpenMx' was built under R version 4.6.2
 #> Loading required package: tidySEM
 library(tidySEM)
 library(OpenMx)
@@ -143,13 +143,13 @@ For a single continuous auxiliary variable, the simplest call is:
 ``` r
 bch_fit <- BCH(fit, data = dat$z)
 table_results(bch_fit)
-#> Warning: Unavailable columns requested: class
-#>                label est_sig   se pval       confint  group
-#> 1     Means.y.class1   -0.02 0.09 0.82 [-0.20, 0.16] class1
-#> 2 Variances.y.class1 0.91*** 0.12 0.00  [0.67, 1.15] class1
-#> 3     Means.y.class2 0.96*** 0.11 0.00  [0.74, 1.17] class2
-#> 4 Variances.y.class2 1.10*** 0.16 0.00  [0.78, 1.43] class2
 ```
+
+    #>              label est_sig   se pval       confint group
+    #> 1     Means.y.aux1   -0.02 0.09 0.82 [-0.20, 0.16]  aux1
+    #> 2 Variances.y.aux1 0.91*** 0.12 0.00  [0.67, 1.15]  aux1
+    #> 3     Means.y.aux2 0.96*** 0.11 0.00  [0.74, 1.17]  aux2
+    #> 4 Variances.y.aux2 1.10*** 0.16 0.00  [0.78, 1.43]  aux2
 
 We see that the mean of class 2 is higher than that of class 1. Note
 that the standard errors of BCH analyses are not valid. Do not interpret
@@ -162,16 +162,17 @@ ratio test:
 ``` r
 bch_test <- lr_test(bch_fit, compare = "M")
 bch_test
-#> BCH test for equality across classes
-#> 
-#> Overall likelihood ratio test:
-#>  LL_baseline LL_restricted   LL_dif df            p
-#>     566.1196      607.5235 41.40394  1 1.238077e-10
-#> 
-#> Pairwise comparisons using likelihood ratio tests:
-#>  Model1 Model2 LL_baseline LL_restricted   LL_dif df            p
-#>  class1 class2    566.1196      607.5235 41.40394  1 1.238077e-10
 ```
+
+    #> BCH test for equality across classes
+    #> 
+    #> Overall likelihood ratio test:
+    #>  LL_baseline LL_restricted   LL_dif df            p
+    #>     566.1196      607.5235 41.40394  1 1.238077e-10
+    #> 
+    #> Pairwise comparisons using likelihood ratio tests:
+    #>  Model1 Model2 LL_baseline LL_restricted   LL_dif df            p
+    #>    aux1   aux2    566.1196      607.5235 41.40394  1 1.238077e-10
 
 Note that, for a single auxiliary variable, a significant between-class
 difference can be interpreted either as evidence that class causes
@@ -200,7 +201,6 @@ We can get the results as follows:
 
 ``` r
 table_results(fit_two)
-#> Warning: Unavailable columns requested: class
 #>              label est_sig   se pval       confint group
 #> 1     Means.z.aux1   -0.03 0.09 0.72 [-0.22, 0.15]  aux1
 #> 2 Variances.z.aux1 0.96*** 0.13 0.00  [0.71, 1.22]  aux1
@@ -224,16 +224,17 @@ example, the `M` matrix (means):
 
 ``` r
 lr_test(fit_two, compare = "M")
-#> BCH test for equality across classes
-#> 
-#> Overall likelihood ratio test:
-#>  LL_baseline LL_restricted   LL_dif df            p
-#>     1145.927      1187.533 41.60663  1 1.116141e-10
-#> 
-#> Pairwise comparisons using likelihood ratio tests:
-#>  Model1 Model2 LL_baseline LL_restricted   LL_dif df            p
-#>    aux1   aux2    1145.927      1187.533 41.60663  1 1.116141e-10
 ```
+
+    #> BCH test for equality across classes
+    #> 
+    #> Overall likelihood ratio test:
+    #>  LL_baseline LL_restricted   LL_dif df            p
+    #>     1145.927      1187.533 41.60663  1 1.116141e-10
+    #> 
+    #> Pairwise comparisons using likelihood ratio tests:
+    #>  Model1 Model2 LL_baseline LL_restricted   LL_dif df            p
+    #>    aux1   aux2    1145.927      1187.533 41.60663  1 1.116141e-10
 
 ## One-step estimation
 
@@ -254,18 +255,19 @@ fit_one <- one_step(
   data = dat$z
 )
 table_results(fit_one,  columns = c("label", "est", "se", "confint", "group"))
-#>               label   est   se       confint group
-#> 1      Means.y.aux1 -0.03 0.09 [-0.22, 0.15]  aux1
-#> 2  Variances.y.aux1  0.96 0.13  [0.71, 1.22]  aux1
-#> 3      Means.y.aux2  1.00 0.11  [0.78, 1.22]  aux2
-#> 4  Variances.y.aux2  0.98 0.15  [0.68, 1.29]  aux2
-#> 5           eta1.NA  0.24 0.15 [-0.05, 0.54]  <NA>
-#> 6        Means.1.NA  0.01 0.06 [-0.11, 0.12]  <NA>
-#> 7        Means.2.NA  2.05 0.07  [1.92, 2.19]  <NA>
-#> 8    Variances.1.NA  0.25 0.04  [0.18, 0.32]  <NA>
-#> 9   weights[1,1].NA  0.56 0.04  [0.49, 0.63]  <NA>
-#> 10  weights[1,2].NA  0.44 0.04  [0.37, 0.51]  <NA>
 ```
+
+    #>               label   est   se       confint group
+    #> 1      Means.y.aux1 -0.03 0.09 [-0.22, 0.15]  aux1
+    #> 2  Variances.y.aux1  0.96 0.13  [0.71, 1.22]  aux1
+    #> 3      Means.y.aux2  1.00 0.11  [0.78, 1.22]  aux2
+    #> 4  Variances.y.aux2  0.98 0.15  [0.68, 1.29]  aux2
+    #> 5           eta1.NA  0.24 0.15 [-0.05, 0.54]  <NA>
+    #> 6        Means.1.NA  0.01 0.06 [-0.11, 0.12]  <NA>
+    #> 7        Means.2.NA  2.05 0.07  [1.92, 2.19]  <NA>
+    #> 8    Variances.1.NA  0.25 0.04  [0.18, 0.32]  <NA>
+    #> 9   weights[1,1].NA  0.56 0.04  [0.49, 0.63]  <NA>
+    #> 10  weights[1,2].NA  0.44 0.04  [0.37, 0.51]  <NA>
 
 Note that the results include *all* model parameters, including the
 latent class parameters, as they are all free in this model. Compare
@@ -328,14 +330,12 @@ pseudo_fit <- tidySEM::pseudo_class(
   data = dat["z"],
   m = 20
 )
-#> Registered S3 method overwritten by 'lme4':
-#>   method           from
-#>   na.action.merMod car
 pseudo_fit
-#>             term    estimate  std.error   statistic       df      p.value
-#> 1 factor(class)1 0.000166715 0.09841807 0.001693947 186.0779 9.986502e-01
-#> 2 factor(class)2 0.936606202 0.11272493 8.308775861 161.8635 3.691711e-14
 ```
+
+    #>             term     estimate  std.error   statistic       df      p.value
+    #> 1 factor(class)1 -0.009397288 0.09880393 -0.09511047 183.4078 9.243309e-01
+    #> 2 factor(class)2  0.940805406 0.11191065  8.40675490 161.8759 2.066414e-14
 
 Unlike BCH and two-step estimation, pseudo-class analysis can
 accommodate auxiliary analyses implemented using any ordinary R modeling
@@ -375,10 +375,11 @@ pred <- pseudo_class(
   m = 10
 )
 pred
-#>          term   estimate std.error statistic       df      p.value
-#> 1 (Intercept) -0.6089003 0.1921151 -3.169455 123.7412 1.924902e-03
-#> 2           z  0.8992796 0.1891752  4.753687  86.3312 7.913785e-06
 ```
+
+    #>          term   estimate std.error statistic       df      p.value
+    #> 1 (Intercept) -0.6089003 0.1921151 -3.169455 123.7412 1.924902e-03
+    #> 2           z  0.8992796 0.1891752  4.753687  86.3312 7.913785e-06
 
 The regression estimates the association between `z` and the log odds of
 belonging to class 2 rather than class 1. A negative coefficient

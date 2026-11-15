@@ -81,17 +81,15 @@ library(metamixture)
 set.seed(123)
 
 # Simulate meta-analytic data
-dat <- sim_remix_fixed_tau(n = 100, es = 2)
+dat <- sim_remix_fixed_tau(k = 100, es = 2)
 
 # Estimate candidate models
-models <- lapply(1:3, function(k) {
-remix(
+models <- remix(
   yi = dat$yi,
   vi = dat$vi,
-  classes = k,
+  classes = 1:3,
   tau2 = "equal"
 )
-})
 
 # Five-fold cross-validation
 cv <- cv_enumeration(models, folds = 5)

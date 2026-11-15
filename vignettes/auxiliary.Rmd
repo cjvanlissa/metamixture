@@ -9,21 +9,9 @@ vignette: >
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
-run_everything <- as.logical(toupper(Sys.getenv("METAMIXTURE_RUN_EVERYTHING", "false")))
-show_results <- as.logical(toupper(Sys.getenv("METAMIXTURE_SHOW_RESULTS", "false")))
-cache_dir <- "remix_auxiliary_cache"
-Sys.setenv(METAMIXTURE_CACHE_DIR = cache_dir)
-if(!dir.exists(cache_dir)){
-  dir.create(cache_dir, showWarnings = FALSE)
-  cat(
-  "\n!vignettes/remix_auxiliary_cache/\n",
-  "!vignettes/remix_auxiliary_cache/**\n",
-  file = "../.gitignore",
-  append = TRUE,
-  sep = ""
-)
-}
-
+run_everything <- isTRUE(as.logical(toupper(Sys.getenv("TIDYSEM_RUN_EVERYTHING", "false"))))
+show_results <- isTRUE(as.logical(toupper(Sys.getenv("TIDYSEM_SHOW_RESULTS", "false"))))
+knitr::opts_chunk$set(out.width = "100%")
 ```
 
 Random-effects mixture meta-analysis can reveal unobserved subgroups of studies with different underlying effects or heterogeneity.
@@ -56,8 +44,8 @@ dat <- data.frame(yi = yi, vi = vi, z = z)
 
 Next, we fit the `remix` model:
 
-```{r fitremix, echo = FALSE}
-fit <- metamixture:::run_cached({
+```{r fitremix, echo=FALSE, eval=run_everything || show_results}
+fit <- tidySEM:::run_cached({
   remix(
     yi = dat$yi,
     vi = dat$vi,
@@ -82,7 +70,7 @@ fit <- remix(
 Before conducting auxiliary analyses, let's inspect model fit, the estimated class proportions, and posterior class-membership probabilities.
 Poor separation makes it particularly important not to treat modal assignments as observed classes.
 
-```{r inspect-code, eval=TRUE}
+```{r inspect-code, eval=show_results}
 table_fit(fit)
 ```
 
@@ -91,7 +79,7 @@ For a two-class solution, we can glean a lot of information from the fit table. 
 We also see that cases belonging to each true class have a high posterior probability of being assigned to the matching latent class (`prob_min` and `prob_max`).
 These two quantities are derived from the classification probabilities table:
 
-```{r}
+```{r eval=show_results}
 class_prob(fit, "mostlikely.class")
 ```
 
@@ -103,13 +91,13 @@ The fit table also gives an overall metric of class separation: the entropy crit
 Values over $0.80$ indicate good separation.
 If separation was excellent - say $0.95$ or greater - then we could essentially tread predicted class as an observed variable, with little measurement error:
 
-```{r}
+```{r eval=show_results}
 metamixture:::predict_class_remix(fit)
 ```
 
 Yet even with such excellent correct classification probabilities, errors will occur:
 
-```{r}
+```{r eval=show_results}
 table(true = class_true, pred = metamixture:::predict_class_remix(fit))
 ```
 
@@ -125,8 +113,18 @@ Do not independently sort or filter the auxiliary data after fitting the measure
 
 For a single continuous auxiliary variable, the simplest call is:
 
-```{r}
+```{r bch-fit-code, eval=FALSE}
 bch_fit <- BCH(fit, data = dat$z)
+table_results(bch_fit)
+```
+
+```{r bch-fit-cache, echo=FALSE, eval=run_everything || show_results}
+bch_fit <- tidySEM:::run_cached({
+  BCH(fit, data = dat$z)
+})
+```
+
+```{r bch-fit-result, echo=FALSE, eval=show_results}
 table_results(bch_fit)
 ```
 
@@ -136,8 +134,18 @@ Do not interpret the resulting p-values as if they properly account for classifi
 
 We can test the significance of the mean difference with a likelihood ratio test:
 
-```{r}
+```{r bch-test-code, eval=FALSE}
 bch_test <- lr_test(bch_fit, compare = "M")
+bch_test
+```
+
+```{r bch-test-cache, echo=FALSE, eval=run_everything || show_results}
+bch_test <- tidySEM:::run_cached({
+  lr_test(bch_fit, compare = "M")
+})
+```
+
+```{r bch-test-result, echo=FALSE, eval=show_results}
 bch_test
 ```
 
@@ -150,8 +158,8 @@ Two-step maximum likelihood starts from a fitted measurement model, fixes its pa
 Unlike modal assignment, this likelihood integrates over uncertain class membership.
 It can therefore produce valid standard errors that account for classification uncertainty.
 
-```{r twostep, echo=FALSE}
-fit_two <- metamixture:::run_cached({
+```{r twostep, echo=FALSE, eval=run_everything || show_results}
+fit_two <- tidySEM:::run_cached({
 two_step(
   x = fit,
   model = "z ~ 1",
@@ -169,7 +177,7 @@ fit_two <- two_step(
 
 We can get the results as follows:
 
-```{r}
+```{r eval=show_results}
 table_results(fit_two)
 ```
 
@@ -178,8 +186,18 @@ These adjusted standard errors are valid for inference on the auxiliary paramete
 
 As with `BCH()`, it is possible to perform likelihood ratio tests on parameter matrices, for example, the `M` matrix (means):
 
-```{r}
+```{r two-step-lrt-code, eval=FALSE}
 lr_test(fit_two, compare = "M")
+```
+
+```{r two-step-lrt-cache, echo=FALSE, eval=run_everything || show_results}
+fit_two_lrt <- tidySEM:::run_cached({
+  lr_test(fit_two, compare = "M")
+})
+```
+
+```{r two-step-lrt-result, echo=FALSE, eval=show_results}
+fit_two_lrt
 ```
 
 
@@ -192,7 +210,7 @@ but may be less desirable when researchers want to perform follow-up analyses on
 
 The one-step method has the same interface as `BCH()` and `two_step()`:
 
-```{r}
+```{r one-step-code, eval=FALSE}
 fit_one <- one_step(
   x = fit,
   data = dat$z
@@ -200,11 +218,24 @@ fit_one <- one_step(
 table_results(fit_one,  columns = c("label", "est", "se", "confint", "group"))
 ```
 
+```{r one-step-cache, echo=FALSE, eval=run_everything || show_results}
+fit_one <- tidySEM:::run_cached({
+  one_step(
+    x = fit,
+    data = dat$z
+  )
+})
+```
+
+```{r one-step-result, echo=FALSE, eval=show_results}
+table_results(fit_one,  columns = c("label", "est", "se", "confint", "group"))
+```
+
 Note that the results include *all* model parameters, including the latent class parameters, as they are all free in this model.
 Compare these results to those of the measurement model, and the two-step solution.
 Note that the class parameters are not reported in the results of `fit_two`, as they are fixed and excluded from model optimization:
 
-```{r}
+```{r eval=show_results}
 table_results(fit, columns = c("label", "est", "se", "confint"))
 table_results(fit_two, columns = c("label", "est", "se", "confint", "group"))
 ```
@@ -228,13 +259,28 @@ The `class` variable is generated by the pseudo-class procedure.
 Using the model specification `~ factor(class)` means that we treat class as a two-group factor (otherwise it will incorrectly be treated as numeric!),
 and `-1` means the intercept should be removed from the model, so we get two class-specific means in the output:
 
-```{r}
+```{r pseudo-outcome-code, eval=FALSE}
 pseudo_fit <- tidySEM::pseudo_class(
   x = fit,
   model = lm(z ~ factor(class) - 1, data = data),
   data = dat["z"],
   m = 20
 )
+pseudo_fit
+```
+
+```{r pseudo-outcome-cache, echo=FALSE, eval=run_everything || show_results}
+pseudo_fit <- tidySEM:::run_cached({
+  tidySEM::pseudo_class(
+    x = fit,
+    model = lm(z ~ factor(class) - 1, data = data),
+    data = dat["z"],
+    m = 20
+  )
+})
+```
+
+```{r pseudo-outcome-result, echo=FALSE, eval=show_results}
 pseudo_fit
 ```
 
@@ -252,7 +298,7 @@ Our theory implies the hypothesis that `z` causes class membership.
 To test this hypothesis, we can use `pseudo_class()` to repeatedly draw plausible class assignments from the posterior probabilities, fit a logistic regression in each dataset, and pool the regression estimates.
 
 
-```{r}
+```{r pseudo-predictor-code, eval=FALSE}
 # Predict latent class membership from an auxiliary variable
 set.seed(783)
 pred <- pseudo_class(
@@ -265,6 +311,26 @@ pred <- pseudo_class(
   data = data.frame(z = dat$z),
   m = 10
 )
+pred
+```
+
+```{r pseudo-predictor-cache, echo=FALSE, eval=run_everything || show_results}
+pred <- tidySEM:::run_cached({
+  set.seed(783)
+  pseudo_class(
+  x = fit,
+  model = glm(
+    I(as.integer(class) == 2L) ~ z,
+    data = data,
+    family = binomial()
+  ),
+  data = data.frame(z = dat$z),
+  m = 10
+)
+})
+```
+
+```{r pseudo-predictor-result, echo=FALSE, eval=show_results}
 pred
 ```
 

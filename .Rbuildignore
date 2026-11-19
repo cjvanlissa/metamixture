@@ -11,3 +11,4 @@
 ^\.github$
 ^README\.Rmd$
 ^metamixture_hex\.png$
+^cran-comments\.md$

@@ -9,6 +9,8 @@ export(sim_remix_fixed_tau)
 export(surprisal)
 import(OpenMx)
 import(tidySEM)
-importFrom(stats,median)
-importFrom(stats,quantile)
+importFrom(stats,
+  median,
+  quantile
+)
 importFrom(utils,getFromNamespace)

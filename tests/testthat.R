@@ -9,5 +9,6 @@
 library(testthat)
 library(metamixture)
 library(tidySEM)
-library(metafor)
+if(requireNamespace("metafor", quietly = TRUE)) library(metafor)
+OpenMx::mxOption(NULL, "Number of Threads", 1)
 test_check("metamixture")

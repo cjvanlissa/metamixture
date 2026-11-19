@@ -24,9 +24,9 @@ variable `z` is a study characteristic associated with class membership
 but was not included in the original mixture fit.
 
 ``` r
+
 library(metamixture)
 #> Loading required package: OpenMx
-#> Warning: package 'OpenMx' was built under R version 4.6.2
 #> Loading required package: tidySEM
 library(tidySEM)
 library(OpenMx)
@@ -44,6 +44,7 @@ dat <- data.frame(yi = yi, vi = vi, z = z)
 Next, we fit the `remix` model:
 
 ``` r
+
 fit <- remix(
   yi = dat$yi,
   vi = dat$vi,
@@ -60,6 +61,7 @@ probabilities. Poor separation makes it particularly important not to
 treat modal assignments as observed classes.
 
 ``` r
+
 table_fit(fit)
 #>   Minus2LogLikelihood   n Parameters observedStatistics  df RMSEASquared
 #> 1            579.0184 200          4                  0 196            0
@@ -80,6 +82,7 @@ posterior probability of being assigned to the matching latent class
 classification probabilities table:
 
 ``` r
+
 class_prob(fit, "mostlikely.class")
 #> $mostlikely.class
 #>           assigned.1 assigned.2
@@ -102,6 +105,7 @@ essentially tread predicted class as an observed variable, with little
 measurement error:
 
 ``` r
+
 metamixture:::predict_class_remix(fit)
 #>   [1] 2 2 1 1 2 1 2 2 2 1 1 2 1 1 1 1 2 2 1 1 1 2 2 2 2 1 2 2 2 2 1 1 2 2 1 1 1
 #>  [38] 1 1 2 1 1 1 1 2 1 2 1 1 1 1 2 2 1 2 1 1 2 2 1 1 1 1 1 2 2 1 2 1 1 1 1 2 1
@@ -115,6 +119,7 @@ Yet even with such excellent correct classification probabilities,
 errors will occur:
 
 ``` r
+
 table(true = class_true, pred = metamixture:::predict_class_remix(fit))
 #>     pred
 #> true   1   2
@@ -141,6 +146,7 @@ measurement model.
 For a single continuous auxiliary variable, the simplest call is:
 
 ``` r
+
 bch_fit <- BCH(fit, data = dat$z)
 table_results(bch_fit)
 ```
@@ -160,6 +166,7 @@ We can test the significance of the mean difference with a likelihood
 ratio test:
 
 ``` r
+
 bch_test <- lr_test(bch_fit, compare = "M")
 bch_test
 ```
@@ -190,6 +197,7 @@ membership. It can therefore produce valid standard errors that account
 for classification uncertainty.
 
 ``` r
+
 fit_two <- two_step(
   x = fit,
   model = "z ~ 1",
@@ -200,6 +208,7 @@ fit_two <- two_step(
 We can get the results as follows:
 
 ``` r
+
 table_results(fit_two)
 #>              label est_sig   se pval       confint group
 #> 1     Means.z.aux1   -0.03 0.09 0.72 [-0.22, 0.15]  aux1
@@ -223,6 +232,7 @@ is possible to perform likelihood ratio tests on parameter matrices, for
 example, the `M` matrix (means):
 
 ``` r
+
 lr_test(fit_two, compare = "M")
 ```
 
@@ -250,6 +260,7 @@ The one-step method has the same interface as
 [`two_step()`](https://cjvanlissa.github.io/tidySEM/reference/two_step.html):
 
 ``` r
+
 fit_one <- one_step(
   x = fit,
   data = dat$z
@@ -276,6 +287,7 @@ solution. Note that the class parameters are not reported in the results
 of `fit_two`, as they are fixed and excluded from model optimization:
 
 ``` r
+
 table_results(fit, columns = c("label", "est", "se", "confint"))
 #>          label   est   se       confint
 #> 1         eta1  0.20 0.15 [-0.10, 0.50]
@@ -324,6 +336,7 @@ treated as numeric!), and `-1` means the intercept should be removed
 from the model, so we get two class-specific means in the output:
 
 ``` r
+
 pseudo_fit <- tidySEM::pseudo_class(
   x = fit,
   model = lm(z ~ factor(class) - 1, data = data),
@@ -362,6 +375,7 @@ probabilities, fit a logistic regression in each dataset, and pool the
 regression estimates.
 
 ``` r
+
 # Predict latent class membership from an auxiliary variable
 set.seed(783)
 pred <- pseudo_class(

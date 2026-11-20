@@ -9,6 +9,10 @@
 * GitHub Actions os: ubuntu-latest, r: 'devel', http-user-agent: 'release'
 * GitHub Actions os: ubuntu-latest, r: 'release'
 * GitHub Actions os: ubuntu-latest, r: 'oldrel-1'
+* r-hub [VM] linux R-* (any version) ubuntu-latest on GitHub
+* r-hub [VM] m1-san R-* (any version) macos-15 on GitHub, ASAN + UBSAN …
+* r-hub [VM] macos R-* (any version) macos-15-intel on GitHub
+* r-hub [VM] macos-arm64 R-* (any version) macos-latest on GitHub
           
 0 errors | 0 warnings | 1 note
 
